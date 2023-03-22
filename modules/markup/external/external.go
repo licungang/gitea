@@ -61,12 +61,23 @@ func (p *Renderer) SanitizerRules() []setting.MarkupSanitizerRule {
 
 // SanitizerDisabled disabled sanitize if return true
 func (p *Renderer) SanitizerDisabled() bool {
-	return p.RenderContentMode == setting.RenderContentModeNoSanitizer || p.RenderContentMode == setting.RenderContentModeIframe
+	return p.RenderContentMode == setting.RenderContentModeNoSanitizer ||
+		p.RenderContentMode == setting.RenderContentModeIframe
 }
 
 // DisplayInIFrame represents whether render the content with an iframe
 func (p *Renderer) DisplayInIFrame() bool {
 	return p.RenderContentMode == setting.RenderContentModeIframe
+}
+
+// IframeSandbox represents iframe sandbox
+func (p *Renderer) IframeSandbox() string {
+	return p.RenderContentIframeSandbox
+}
+
+// ExternalCSP represents external render CSP
+func (p *Renderer) ExternalCSP() string {
+	return p.RenderContentExternalCSP
 }
 
 func envMark(envName string) string {
