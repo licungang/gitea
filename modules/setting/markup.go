@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"code.gitea.io/gitea/modules/log"
-
 	"gopkg.in/ini.v1"
 )
 
@@ -23,6 +22,7 @@ const (
 	RenderContentModeSanitized   = "sanitized"
 	RenderContentModeNoSanitizer = "no-sanitizer"
 	RenderContentModeIframe      = "iframe"
+	RenderContentModePDF         = "pdf"
 )
 
 // Markdown settings
@@ -175,9 +175,18 @@ func newMarkupRenderer(name string, sec *ini.Section) {
 	}
 	if renderContentMode != RenderContentModeSanitized &&
 		renderContentMode != RenderContentModeNoSanitizer &&
-		renderContentMode != RenderContentModeIframe {
+		renderContentMode != RenderContentModeIframe &&
+		renderContentMode != RenderContentModePDF {
 		log.Error("invalid RENDER_CONTENT_MODE: %q, default to %q", renderContentMode, RenderContentModeSanitized)
 		renderContentMode = RenderContentModeSanitized
+	}
+
+	needPostProcessDefault := renderContentMode != RenderContentModePDF
+	needPostProcess := sec.Key("NEED_POSTPROCESS").MustBool(needPostProcessDefault)
+	if needPostProcess && renderContentMode == RenderContentModePDF {
+		log.Error("NEED_POSTPROCESS: %q is incompatible with RENDER_CONTENT_MODE: %q, default to %q",
+			needPostProcess, renderContentMode, false)
+		needPostProcess = false
 	}
 
 	ExternalMarkupRenderers = append(ExternalMarkupRenderers, &MarkupRenderer{
@@ -186,7 +195,7 @@ func newMarkupRenderer(name string, sec *ini.Section) {
 		FileExtensions:    exts,
 		Command:           command,
 		IsInputFile:       sec.Key("IS_INPUT_FILE").MustBool(false),
-		NeedPostProcess:   sec.Key("NEED_POSTPROCESS").MustBool(true),
+		NeedPostProcess:   needPostProcess,
 		RenderContentMode: renderContentMode,
 	})
 }
