@@ -226,6 +226,10 @@ var (
 			Value: "",
 			Usage: "Group Claim value for restricted users",
 		},
+		cli.BoolFlag{
+			Name:  "force-oauth",
+			Usage: "set to force all logins to the configured oauth provider",
+		},
 		cli.StringFlag{
 			Name:  "group-team-map",
 			Value: "",
@@ -451,6 +455,7 @@ func parseOAuth2Config(c *cli.Context) *oauth2.Source {
 		CustomURLMapping:              customURLMapping,
 		IconURL:                       c.String("icon-url"),
 		SkipLocalTwoFA:                c.Bool("skip-local-2fa"),
+		ForceOAuth:                    c.Bool("force-oauth"),
 		Scopes:                        c.StringSlice("scopes"),
 		RequiredClaimName:             c.String("required-claim-name"),
 		RequiredClaimValue:            c.String("required-claim-value"),
@@ -548,6 +553,9 @@ func runUpdateOauth(c *cli.Context) error {
 	}
 	if c.IsSet("restricted-group") {
 		oAuth2Config.RestrictedGroup = c.String("restricted-group")
+	}
+	if c.IsSet("force-oauth") {
+		oAuth2Config.ForceOAuth = c.BoolT("force-oauth")
 	}
 	if c.IsSet("group-team-map") {
 		oAuth2Config.GroupTeamMap = c.String("group-team-map")
