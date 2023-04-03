@@ -71,6 +71,7 @@ import {
 } from './features/repo-settings.js';
 import {initViewedCheckboxListenerFor} from './features/pull-view-file.js';
 import {initOrgTeamSearchRepoBox, initOrgTeamSettings} from './features/org-team.js';
+import {initOrgTimes} from './features/org-times.js';
 import {initUserAuthWebAuthn, initUserAuthWebAuthnRegister} from './features/user-auth-webauthn.js';
 import {initRepoRelease, initRepoReleaseNew} from './features/repo-release.js';
 import {initRepoEditor} from './features/repo-editor.js';
@@ -145,6 +146,8 @@ onDomReady(() => {
 
   initOrgTeamSearchRepoBox();
   initOrgTeamSettings();
+
+  initOrgTimes();
 
   initRepoActivityTopAuthorsChart();
   initRepoArchiveLinks();
