@@ -38,6 +38,7 @@ var Git = struct {
 		Pull    int
 		GC      int `ini:"GC"`
 	} `ini:"git.timeout"`
+	MaxDiffHighlightFileSize int64
 }{
 	DisableDiffHighlight:      false,
 	MaxGitDiffLines:           1000,
@@ -67,6 +68,7 @@ var Git = struct {
 		Pull:    300,
 		GC:      60,
 	},
+	MaxDiffHighlightFileSize: 5 * 1024,
 }
 
 type GitConfigType struct {

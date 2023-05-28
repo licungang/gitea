@@ -76,13 +76,15 @@ const (
 
 // DiffLine represents a line difference in a DiffSection.
 type DiffLine struct {
-	LeftIdx     int
-	RightIdx    int
-	Match       int
-	Type        DiffLineType
-	Content     string
-	Comments    []*issues_model.Comment
-	SectionInfo *DiffLineSectionInfo
+	LeftIdx             int
+	RightIdx            int
+	Match               int
+	Type                DiffLineType
+	Content             string
+	Comments            []*issues_model.Comment
+	SectionInfo         *DiffLineSectionInfo
+	HighlightContent    string
+	HasHighlightContent bool
 }
 
 // DiffLineSectionInfo represents diff line section meta data
@@ -305,8 +307,8 @@ func (diffSection *DiffSection) GetComputedInlineDiffFor(diffLine *DiffLine, loc
 
 	var (
 		compareDiffLine *DiffLine
-		diff1           string
-		diff2           string
+		diff1           *DiffLine
+		diff2           *DiffLine
 	)
 
 	language := ""
@@ -321,26 +323,41 @@ func (diffSection *DiffSection) GetComputedInlineDiffFor(diffLine *DiffLine, loc
 	case DiffLineAdd:
 		compareDiffLine = diffSection.GetLine(DiffLineDel, diffLine.RightIdx)
 		if compareDiffLine == nil {
+			if diffLine.HasHighlightContent {
+				status, content := charset.EscapeControlHTML(diffLine.HighlightContent, locale)
+				return DiffInline{EscapeStatus: status, Content: template.HTML(content)}
+			}
+
 			return DiffInlineWithHighlightCode(diffSection.FileName, language, diffLine.Content[1:], locale)
 		}
-		diff1 = compareDiffLine.Content
-		diff2 = diffLine.Content
+		diff1 = compareDiffLine
+		diff2 = diffLine
 	case DiffLineDel:
 		compareDiffLine = diffSection.GetLine(DiffLineAdd, diffLine.LeftIdx)
 		if compareDiffLine == nil {
+			if diffLine.HasHighlightContent {
+				status, content := charset.EscapeControlHTML(diffLine.HighlightContent, locale)
+				return DiffInline{EscapeStatus: status, Content: template.HTML(content)}
+			}
+
 			return DiffInlineWithHighlightCode(diffSection.FileName, language, diffLine.Content[1:], locale)
 		}
-		diff1 = diffLine.Content
-		diff2 = compareDiffLine.Content
+		diff1 = diffLine
+		diff2 = compareDiffLine
 	default:
 		if strings.IndexByte(" +-", diffLine.Content[0]) > -1 {
+			if diffLine.HasHighlightContent {
+				status, content := charset.EscapeControlHTML(diffLine.HighlightContent, locale)
+				return DiffInline{EscapeStatus: status, Content: template.HTML(content)}
+			}
+
 			return DiffInlineWithHighlightCode(diffSection.FileName, language, diffLine.Content[1:], locale)
 		}
 		return DiffInlineWithHighlightCode(diffSection.FileName, language, diffLine.Content, locale)
 	}
 
 	hcd := newHighlightCodeDiff()
-	diffRecord := hcd.diffWithHighlight(diffSection.FileName, language, diff1[1:], diff2[1:])
+	diffRecord := hcd.diffWithHighlight(diffSection.FileName, language, diff1.Content[1:], diff1.HighlightContent, diff2.Content[1:], diff2.HighlightContent)
 	// it seems that Gitea doesn't need the line wrapper of Chroma, so do not add them back
 	// if the line wrappers are still needed in the future, it can be added back by "diffToHTML(hcd.lineWrapperTags. ...)"
 	diffHTML := diffToHTML(nil, diffRecord, diffLine.Type)
@@ -376,6 +393,115 @@ type DiffFile struct {
 // GetType returns type of diff file.
 func (diffFile *DiffFile) GetType() int {
 	return int(diffFile.Type)
+}
+
+func (diffFile *DiffFile) FullFileHiglight(beforeCommit, commit *git.Commit, beforeContent, content []byte) {
+	if diffFile.IsBin {
+		return
+	}
+
+	preRenderAddOrDeletedFile := func(path, lang string) ([]string, string) {
+		content := ""
+
+		if len(diffFile.Sections) != 1 {
+			return nil, ""
+		}
+
+		for index, diffLine := range diffFile.Sections[0].Lines {
+			if diffLine.Type == DiffLineSection && index == 0 {
+				continue
+			}
+
+			if diffLine.Type != DiffLineAdd && diffLine.Type != DiffLineDel {
+				return nil, ""
+			}
+
+			content += diffLine.Content[1:] + "\n"
+		}
+
+		highlightedContent, lang, err := highlight.File(path, lang, []byte(content))
+		if err != nil {
+			log.Error("highlight.File: %v", err)
+			return nil, ""
+		}
+
+		return highlightedContent, lang
+	}
+
+	loadCommitFileContent := func(commit *git.Commit, path, lang string, content []byte) ([]string, string) {
+		if commit == nil && len(content) == 0 {
+			return nil, ""
+		}
+
+		if len(content) == 0 {
+			entry, err := commit.GetTreeEntryByPath(path)
+			if err != nil {
+				log.Error("GetTreeEntryByPath: %v", err)
+				return nil, ""
+			}
+
+			if entry.Blob().Size() >= setting.Git.MaxDiffHighlightFileSize {
+				return nil, ""
+			}
+
+			f, err := entry.Blob().DataAsync()
+			if err != nil {
+				log.Error("Blob.DataAsync: %v", err)
+				return nil, ""
+			}
+
+			content, err = io.ReadAll(f)
+			_ = f.Close()
+			if err != nil {
+				log.Error("io.ReadAll: %v", err)
+				return nil, ""
+			}
+		}
+
+		highlightedContent, lang, err := highlight.File(path, lang, content)
+		if err != nil {
+			log.Error("highlight.File: %v", err)
+			return nil, ""
+		}
+
+		return highlightedContent, lang
+	}
+
+	var (
+		oldContent []string
+		newContent []string
+	)
+
+	if diffFile.Type == DiffFileDel {
+		oldContent, diffFile.Language = preRenderAddOrDeletedFile(diffFile.OldName, diffFile.Language)
+	} else if diffFile.Type == DiffFileAdd {
+		newContent, diffFile.Language = preRenderAddOrDeletedFile(diffFile.Name, diffFile.Language)
+	} else if diffFile.Type == DiffFileChange {
+		oldContent, _ = loadCommitFileContent(beforeCommit, diffFile.OldName, diffFile.Language, beforeContent)
+		newContent, diffFile.Language = loadCommitFileContent(commit, diffFile.Name, diffFile.Language, content)
+	} else {
+		return
+	}
+
+	for _, diffSection := range diffFile.Sections {
+		for _, diffLine := range diffSection.Lines {
+			switch diffLine.Type {
+			case DiffLineAdd:
+				fallthrough
+			case DiffLinePlain:
+				if diffLine.RightIdx > 0 && diffLine.RightIdx <= len(newContent) {
+					diffLine.HighlightContent = newContent[diffLine.RightIdx-1]
+					diffLine.HasHighlightContent = true
+				}
+
+			case DiffLineDel:
+				if diffLine.LeftIdx > 0 && diffLine.LeftIdx <= len(oldContent) {
+					diffLine.HighlightContent = oldContent[diffLine.LeftIdx-1]
+					diffLine.HasHighlightContent = true
+				}
+			}
+		}
+	}
 }
 
 // GetTailSection creates a fake DiffLineSection if the last section is not the end of the file
@@ -1084,6 +1210,8 @@ func GetDiff(gitRepo *git.Repository, opts *DiffOptions, files ...string) (*Diff
 		return nil, err
 	}
 
+	var beforeCommit *git.Commit
+
 	cmdDiff := git.NewCommand(gitRepo.Ctx)
 	if (len(opts.BeforeCommitID) == 0 || opts.BeforeCommitID == git.EmptySHA) && commit.ParentCount() == 0 {
 		cmdDiff.AddArguments("diff", "--src-prefix=\\a/", "--dst-prefix=\\b/", "-M").
@@ -1095,6 +1223,12 @@ func GetDiff(gitRepo *git.Repository, opts *DiffOptions, files ...string) (*Diff
 		if len(actualBeforeCommitID) == 0 {
 			parentCommit, _ := commit.Parent(0)
 			actualBeforeCommitID = parentCommit.ID.String()
+			beforeCommit = parentCommit
+		} else {
+			beforeCommit, err = gitRepo.GetCommit(actualBeforeCommitID)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		cmdDiff.AddArguments("diff", "--src-prefix=\\a/", "--dst-prefix=\\b/", "-M").
@@ -1185,6 +1319,8 @@ func GetDiff(gitRepo *git.Repository, opts *DiffOptions, files ...string) (*Diff
 		if tailSection != nil {
 			diffFile.Sections = append(diffFile.Sections, tailSection)
 		}
+
+		diffFile.FullFileHiglight(beforeCommit, commit, nil, nil)
 	}
 
 	separator := "..."
