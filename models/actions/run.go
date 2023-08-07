@@ -92,6 +92,19 @@ func (run *ActionRun) LoadAttributes(ctx context.Context) error {
 		return nil
 	}
 
+	if err := run.LoadRepo(ctx); err != nil {
+		return err
+	}
+
+	return run.LoadTriggerUser(ctx)
+}
+
+// LoadRepo load Repo if not loaded
+func (run *ActionRun) LoadRepo(ctx context.Context) error {
+	if run == nil {
+		return nil
+	}
+
 	if run.Repo == nil {
 		repo, err := repo_model.GetRepositoryByID(ctx, run.RepoID)
 		if err != nil {
@@ -99,8 +112,13 @@ func (run *ActionRun) LoadAttributes(ctx context.Context) error {
 		}
 		run.Repo = repo
 	}
-	if err := run.Repo.LoadAttributes(ctx); err != nil {
-		return err
+	return run.Repo.LoadAttributes(ctx)
+}
+
+// LoadTriggerUser load TriggerUser if not loaded
+func (run *ActionRun) LoadTriggerUser(ctx context.Context) error {
+	if run == nil {
+		return nil
 	}
 
 	if run.TriggerUser == nil {
@@ -327,6 +345,21 @@ func GetRunByIndex(ctx context.Context, repoID, index int64) (*ActionRun, error)
 		return nil, err
 	} else if !has {
 		return nil, fmt.Errorf("run with index %d %d: %w", repoID, index, util.ErrNotExist)
+	}
+
+	return run, nil
+}
+
+func GetRunByCommitSHA(ctx context.Context, repoID int64, commitSHA string) (*ActionRun, error) {
+	run := &ActionRun{
+		RepoID:    repoID,
+		CommitSHA: commitSHA,
+	}
+	has, err := db.GetEngine(ctx).Get(run)
+	if err != nil {
+		return nil, err
+	} else if !has {
+		return nil, fmt.Errorf("run with commitSHA %d %s: %w", repoID, commitSHA, util.ErrNotExist)
 	}
 
 	return run, nil

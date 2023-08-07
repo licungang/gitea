@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"code.gitea.io/gitea/models"
+	actions_model "code.gitea.io/gitea/models/actions"
 	activities_model "code.gitea.io/gitea/models/activities"
 	"code.gitea.io/gitea/models/db"
 	git_model "code.gitea.io/gitea/models/git"
@@ -442,6 +443,26 @@ func GetMergedBaseCommitID(ctx *context.Context, issue *issues_model.Issue) stri
 	return baseCommit
 }
 
+func PrepareCommitStatusInfo(ctx *context.Context, sha string) ([]*git_model.CommitStatus, *git_model.CommitStatus, error) {
+	commitStatuses, commitStatus, _, err := git_model.GetLatestCommitStatuses(ctx, ctx.Repo.Repository.ID, sha, db.ListOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(commitStatuses) > 0 {
+		ctx.Data["LatestCommitStatuses"] = commitStatuses
+		ctx.Data["LatestCommitStatus"] = commitStatus
+		run, err := actions_model.GetRunByCommitSHA(ctx, ctx.Repo.Repository.ID, sha)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := run.LoadRepo(ctx); err != nil {
+			return nil, nil, err
+		}
+		ctx.Data["TargetRunURL"] = run.Link()
+	}
+	return commitStatuses, commitStatus, nil
+}
+
 // PrepareMergedViewPullInfo show meta information for a merged pull request view page
 func PrepareMergedViewPullInfo(ctx *context.Context, issue *issues_model.Issue) *git.CompareInfo {
 	pull := issue.PullRequest
@@ -470,14 +491,10 @@ func PrepareMergedViewPullInfo(ctx *context.Context, issue *issues_model.Issue) 
 
 	if len(compareInfo.Commits) != 0 {
 		sha := compareInfo.Commits[0].ID.String()
-		commitStatuses, _, err := git_model.GetLatestCommitStatus(ctx, ctx.Repo.Repository.ID, sha, db.ListOptions{ListAll: true})
-		if err != nil {
-			ctx.ServerError("GetLatestCommitStatus", err)
+
+		if _, _, err := PrepareCommitStatusInfo(ctx, sha); err != nil {
+			ctx.ServerError("PrepareCommitStatusInfo", err)
 			return nil
-		}
-		if len(commitStatuses) != 0 {
-			ctx.Data["LatestCommitStatuses"] = commitStatuses
-			ctx.Data["LatestCommitStatus"] = git_model.CalcCommitStatus(commitStatuses)
 		}
 	}
 
@@ -532,14 +549,9 @@ func PrepareViewPullInfo(ctx *context.Context, issue *issues_model.Issue) *git.C
 			ctx.ServerError(fmt.Sprintf("GetRefCommitID(%s)", pull.GetGitRefName()), err)
 			return nil
 		}
-		commitStatuses, _, err := git_model.GetLatestCommitStatus(ctx, repo.ID, sha, db.ListOptions{ListAll: true})
-		if err != nil {
-			ctx.ServerError("GetLatestCommitStatus", err)
+		if _, _, err := PrepareCommitStatusInfo(ctx, sha); err != nil {
+			ctx.ServerError("PrepareCommitStatusInfo", err)
 			return nil
-		}
-		if len(commitStatuses) > 0 {
-			ctx.Data["LatestCommitStatuses"] = commitStatuses
-			ctx.Data["LatestCommitStatus"] = git_model.CalcCommitStatus(commitStatuses)
 		}
 
 		compareInfo, err := baseGitRepo.GetCompareInfo(pull.BaseRepo.RepoPath(),
@@ -624,14 +636,10 @@ func PrepareViewPullInfo(ctx *context.Context, issue *issues_model.Issue) *git.C
 		return nil
 	}
 
-	commitStatuses, _, err := git_model.GetLatestCommitStatus(ctx, repo.ID, sha, db.ListOptions{ListAll: true})
+	commitStatuses, commitStatus, err := PrepareCommitStatusInfo(ctx, sha)
 	if err != nil {
-		ctx.ServerError("GetLatestCommitStatus", err)
+		ctx.ServerError("PrepareCommitStatusInfo", err)
 		return nil
-	}
-	if len(commitStatuses) > 0 {
-		ctx.Data["LatestCommitStatuses"] = commitStatuses
-		ctx.Data["LatestCommitStatus"] = git_model.CalcCommitStatus(commitStatuses)
 	}
 
 	if pb != nil && pb.EnableStatusCheck {
@@ -643,7 +651,7 @@ func PrepareViewPullInfo(ctx *context.Context, issue *issues_model.Issue) *git.C
 			}
 			return false
 		}
-		ctx.Data["RequiredStatusCheckState"] = pull_service.MergeRequiredContextsCommitStatus(commitStatuses, pb.StatusCheckContexts)
+		ctx.Data["RequiredStatusCheckState"] = pull_service.MergeRequiredContextsCommitStatus(commitStatuses, commitStatus, pb.StatusCheckContexts)
 	}
 
 	ctx.Data["HeadBranchMovedOn"] = headBranchSha != sha
