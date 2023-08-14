@@ -1254,3 +1254,8 @@ func FixCommentTypeLabelWithOutsideLabels(ctx context.Context) (int64, error) {
 func (c *Comment) HasOriginalAuthor() bool {
 	return c.OriginalAuthor != "" && c.OriginalAuthorID != 0
 }
+
+func (c *Comment) GetIssueClosedStatus() int {
+	n, _ := strconv.Atoi(c.Content)
+	return n
+}

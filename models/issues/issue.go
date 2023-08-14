@@ -92,6 +92,15 @@ func (err ErrIssueWasClosed) Error() string {
 	return fmt.Sprintf("Issue [%d] %d was already closed", err.ID, err.Index)
 }
 
+type IssueClosedStatus int8
+
+const (
+	IssueClosedStatusCommon   IssueClosedStatus = iota // 0 close issue without any state.
+	IssueClosedStatusArchived                          // 1
+	IssueClosedStatusResolved                          // 2
+	IssueClosedStatusStale                             // 3
+)
+
 // Issue represents an issue or pull request of repository.
 type Issue struct {
 	ID               int64                  `xorm:"pk autoincr"`
@@ -110,12 +119,13 @@ type Issue struct {
 	Milestone        *Milestone             `xorm:"-"`
 	Project          *project_model.Project `xorm:"-"`
 	Priority         int
-	AssigneeID       int64            `xorm:"-"`
-	Assignee         *user_model.User `xorm:"-"`
-	IsClosed         bool             `xorm:"INDEX"`
-	IsRead           bool             `xorm:"-"`
-	IsPull           bool             `xorm:"INDEX"` // Indicates whether is a pull request or not.
-	PullRequest      *PullRequest     `xorm:"-"`
+	AssigneeID       int64             `xorm:"-"`
+	Assignee         *user_model.User  `xorm:"-"`
+	IsClosed         bool              `xorm:"INDEX"`
+	ClosedStatus     IssueClosedStatus `xorm:"NOT NULL DEFAULT 0"`
+	IsRead           bool              `xorm:"-"`
+	IsPull           bool              `xorm:"INDEX"` // Indicates whether is a pull request or not.
+	PullRequest      *PullRequest      `xorm:"-"`
 	NumComments      int
 	Ref              string
 	PinOrder         int `xorm:"DEFAULT 0"`
