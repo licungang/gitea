@@ -4,11 +4,11 @@ E2e tests largely follow the same syntax as [integration tests](../integration).
 Whereas integration tests are intended to mock and stress the back-end, server-side code, e2e tests the interface between front-end and back-end, as well as visual regressions with both assertions and visual comparisons.
 They can be run with make commands for the appropriate backends, namely:
 ```shell
-make test-sqlite
-make test-pgsql
-make test-mysql
-make test-mysql8
-make test-mssql
+make test-e2e-sqlite
+make test-e2e-pgsql
+make test-e2e-mysql
+make test-e2e-mysql8
+make test-e2e-mssql
 ```
 
 Make sure to perform a clean front-end build before running tests:
@@ -63,6 +63,10 @@ Start tests based on the database container
 ```
 TEST_MSSQL_HOST=localhost:1433 TEST_MSSQL_DBNAME=gitea_test TEST_MSSQL_USERNAME=sa TEST_MSSQL_PASSWORD=MwantsaSecurePassword1 make test-e2e-mssql
 ```
+
+## Debug
+
+Set the environment variable `PLAYWRIGHT_DEBUG` to enable [visual debugging](https://playwright.dev/docs/debug#run-in-debug-mode-1).
 
 ## Running individual tests
 
