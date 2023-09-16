@@ -43,7 +43,7 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 	if err := Authenticate(auth, source); err != nil {
 		// when authentication via smtp fails, wraps ErrInvalidArgument
 		// with the original textproto.Error as the cause,
-		// so it will show username or password to the user
+		// so it will show username_password_incorrect to the user
 		// while log the original error so that admin can check.
 		// see: routers/web/auth/auth.go SiginPost
 		if tperr, ok := err.(*textproto.Error); ok {
