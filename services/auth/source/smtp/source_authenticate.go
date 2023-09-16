@@ -41,21 +41,15 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 	}
 
 	if err := Authenticate(auth, source); err != nil {
-		// Check standard error format first,
-		// then fallback to worse case.
-		tperr, ok := err.(*textproto.Error)
-		if (ok && tperr.Code == 535) ||
-			strings.Contains(err.Error(), "Username and Password not accepted") {
-			return nil, user_model.ErrUserNotExist{Name: userName}
+		// when authentication via smtp fails, wrap the error as ErrInvalidArgument
+		// with the original textproto.Erro as the cause
+		// so it will show username or password to the user
+		// while log the original error so that admin can check the actual reason
+		// see: routers/web/auth/auth.go SiginPost
+		if tperr, ok := err.(*textproto.Error); ok {
+			return nil, errors.Join(util.ErrInvalidArgument, tperr)
 		}
-		if (ok && tperr.Code == 534) ||
-			strings.Contains(err.Error(), "Application-specific password required") {
-			return nil, user_model.ErrUserNotExist{Name: userName}
-		}
-		if (ok && tperr.Code == 526) ||
-			strings.Contains(err.Error(), "Authentication failure") {
-			return nil, user_model.ErrUserNotExist{Name: userName}
-		}
+
 		return nil, err
 	}
 
