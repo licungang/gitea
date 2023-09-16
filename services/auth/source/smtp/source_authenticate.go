@@ -52,6 +52,10 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 			strings.Contains(err.Error(), "Application-specific password required") {
 			return nil, user_model.ErrUserNotExist{Name: userName}
 		}
+		if (ok && tperr.Code == 526) ||
+			strings.Contains(err.Error(), "Authentication failure") {
+			return nil, user_model.ErrUserNotExist{Name: userName}
+		}
 		return nil, err
 	}
 

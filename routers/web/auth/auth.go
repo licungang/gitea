@@ -211,11 +211,6 @@ func SignInPost(ctx *context.Context) {
 			log.Info("Failed authentication attempt for %s from %s: %v", form.UserName, ctx.RemoteAddr(), err)
 			ctx.Data["Title"] = ctx.Tr("auth.prohibit_login")
 			ctx.HTML(http.StatusOK, "user/auth/prohibit_login")
-		} else if errors.As(err, &textprotoErr) {
-			ctx.RenderWithErr(ctx.Tr("form.username_password_incorrect"), tplSignIn, &form)
-			log.Info("Failed authentication attempt for %s from %s (code: %d, msg: %s)", form.UserName, ctx.RemoteAddr(),
-				textprotoErr.Code, textprotoErr.Msg,
-			)
 		} else if user_model.IsErrUserInactive(err) {
 			if setting.Service.RegisterEmailConfirm {
 				ctx.Data["Title"] = ctx.Tr("auth.active_your_account")
