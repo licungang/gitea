@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"strings"
 	"time"
 
 	auth_model "code.gitea.io/gitea/models/auth"
@@ -55,6 +56,29 @@ type ActionTask struct {
 
 	Created timeutil.TimeStamp `xorm:"created"`
 	Updated timeutil.TimeStamp `xorm:"updated index"`
+}
+
+func (task *ActionTask) FixtureFieldDumper(fieldName string) ([]byte, error) {
+	if fieldName != "LogIndexes" {
+		return nil, db.ErrFixtureFieldDumperContinue
+	}
+
+	data, err := task.LogIndexes.ToDB()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data) == 0 {
+		return nil, db.ErrFixtureFieldDumperSkip
+	}
+
+	builder := strings.Builder{}
+	fmt.Fprintf(&builder, "0x")
+	for _, v := range data {
+		fmt.Fprintf(&builder, "%02x", v)
+	}
+
+	return []byte(builder.String()), nil
 }
 
 var successfulTokenTaskCache *lru.Cache[string, any]

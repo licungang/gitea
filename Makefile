@@ -180,6 +180,7 @@ TEST_MSSQL_HOST ?= mssql:1433
 TEST_MSSQL_DBNAME ?= gitea
 TEST_MSSQL_USERNAME ?= sa
 TEST_MSSQL_PASSWORD ?= MwantsaSecurePassword1
+TEST_DEV_ADDR ?= localhost
 
 .PHONY: all
 all: build
@@ -517,6 +518,20 @@ generate-ini-sqlite:
 		-e 's|{{TEST_LOGGER}}|$(or $(TEST_LOGGER),test$(COMMA)file)|g' \
 		-e 's|{{TEST_TYPE}}|$(or $(TEST_TYPE),integration)|g' \
 			tests/sqlite.ini.tmpl > tests/sqlite.ini
+
+generate-ini-dev:
+	sed -e 's|{{GITEA_ROOT}}|${CURDIR}|g' -e 's|{{GITEA_DEV_ADDR}}|${TEST_DEV_ADDR}|g' tests/dev.ini.tmpl > tests/dev.ini
+
+.PHONY: test-dev
+test-dev: generate-ini-dev
+	GITEA_ROOT="$(CURDIR)" $(GO) run -tags 'sqlite sqlite_unlock_notify' contrib/dev/dev.go
+
+.PHONY: test-dev-ci
+test-dev-ci: generate-ini-dev
+	GITEA_ROOT="$(CURDIR)" $(GO) run -tags 'sqlite sqlite_unlock_notify' contrib/dev/dev.go web --ci
+
+.PHONY: test-dev-ci-check
+test-dev-ci-check: test-dev-ci test-check
 
 .PHONY: test-sqlite
 test-sqlite: integrations.sqlite.test generate-ini-sqlite

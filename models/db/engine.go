@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -299,3 +300,31 @@ func SetLogSQL(ctx context.Context, on bool) {
 		sess.Engine().ShowSQL(on)
 	}
 }
+
+func AllTablesForEach(hanle func(info *schemas.Table, bean any) error) error {
+	for _, table := range tables {
+		info, err := TableInfo(table)
+		if err != nil {
+			return err
+		}
+
+		err = hanle(info, table)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+type FixtureFieldDumperResult int64
+
+// FixtureFieldDumper custom interface to generate a fixture file
+// return `ErrFixtureFieldDumperContinue` or `ErrFixtureFieldDumperSkip` for special results
+type FixtureFieldDumper interface {
+	FixtureFieldDumper(fieldName string) ([]byte, error)
+}
+
+var ErrFixtureFieldDumperContinue = errors.New("should continue handle with default dumper")
+
+var ErrFixtureFieldDumperSkip = errors.New("should skip this field")

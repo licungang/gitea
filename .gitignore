@@ -110,3 +110,5 @@ prime/
 
 # Manpage
 /man
+
+/tests/dev

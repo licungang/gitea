@@ -117,6 +117,14 @@ type LFSMetaObject struct {
 	UpdatedUnix  timeutil.TimeStamp `xorm:"INDEX updated"`
 }
 
+func (task *LFSMetaObject) FixtureFieldDumper(fieldName string) ([]byte, error) {
+	if fieldName == "UpdatedUnix" {
+		return nil, db.ErrFixtureFieldDumperSkip
+	}
+
+	return nil, db.ErrFixtureFieldDumperContinue
+}
+
 func init() {
 	db.RegisterModel(new(LFSMetaObject))
 }
