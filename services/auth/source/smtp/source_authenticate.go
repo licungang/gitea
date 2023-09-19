@@ -49,7 +49,6 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 		if tperr, ok := err.(*textproto.Error); ok {
 			return nil, errors.Join(util.ErrInvalidArgument, tperr)
 		}
-
 		return nil, err
 	}
 
