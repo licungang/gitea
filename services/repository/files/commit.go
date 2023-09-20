@@ -12,8 +12,10 @@ import (
 	repo_model "code.gitea.io/gitea/models/repo"
 	user_model "code.gitea.io/gitea/models/user"
 	"code.gitea.io/gitea/modules/git"
+	repo_module "code.gitea.io/gitea/modules/repository"
 	"code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/services/automerge"
+	"code.gitea.io/gitea/services/notify"
 )
 
 // CreateCommitStatus creates a new CommitStatus given a bunch of parameters
@@ -29,7 +31,8 @@ func CreateCommitStatus(ctx context.Context, repo *repo_model.Repository, creato
 	}
 	defer closer.Close()
 
-	if commit, err := gitRepo.GetCommit(sha); err != nil {
+	commit, err := gitRepo.GetCommit(sha)
+	if err != nil {
 		gitRepo.Close()
 		return fmt.Errorf("GetCommit[%s]: %w", sha, err)
 	} else if len(sha) != git.SHAFullLength {
@@ -46,6 +49,8 @@ func CreateCommitStatus(ctx context.Context, repo *repo_model.Repository, creato
 	}); err != nil {
 		return fmt.Errorf("NewCommitStatus[repo_id: %d, user_id: %d, sha: %s]: %w", repo.ID, creator.ID, sha, err)
 	}
+
+	notify.CreateCommitStatus(ctx, repo, repo_module.CommitToPushCommit(commit), creator, status)
 
 	if status.State.IsSuccess() {
 		if err := automerge.MergeScheduledPullRequest(ctx, sha, repo); err != nil {
