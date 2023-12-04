@@ -26,7 +26,7 @@ var wikiWorkingPool = sync.NewExclusivePool()
 
 const (
 	DefaultRemote = "origin"
-	DefaultBranch = "master"
+	DefaultBranch = "main"
 )
 
 // InitWiki initializes a wiki for repository,
@@ -41,7 +41,7 @@ func InitWiki(ctx context.Context, repo *repo_model.Repository) error {
 	} else if err = repo_module.CreateDelegateHooks(repo.WikiPath()); err != nil {
 		return fmt.Errorf("createDelegateHooks: %w", err)
 	} else if _, _, err = git.NewCommand(ctx, "symbolic-ref", "HEAD", git.BranchPrefix+DefaultBranch).RunStdString(&git.RunOpts{Dir: repo.WikiPath()}); err != nil {
-		return fmt.Errorf("unable to set default wiki branch to master: %w", err)
+		return fmt.Errorf("unable to set default wiki branch to main: %w", err)
 	}
 	return nil
 }
@@ -55,7 +55,7 @@ func prepareGitPath(gitRepo *git.Repository, wikiPath WebPath) (bool, string, er
 	// Look for both files
 	filesInIndex, err := gitRepo.LsTree(DefaultBranch, unescaped, gitPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "Not a valid object name master") {
+		if strings.Contains(err.Error(), "Not a valid object name main") {
 			return false, gitPath, nil
 		}
 		log.Error("%v", err)
@@ -94,7 +94,7 @@ func updateWikiPage(ctx context.Context, doer *user_model.User, repo *repo_model
 		return fmt.Errorf("InitWiki: %w", err)
 	}
 
-	hasMasterBranch := git.IsBranchExist(ctx, repo.WikiPath(), DefaultBranch)
+	hasMainBranch := git.IsBranchExist(ctx, repo.WikiPath(), DefaultBranch)
 
 	basePath, err := repo_module.CreateTemporaryPath("update-wiki")
 	if err != nil {
@@ -111,7 +111,7 @@ func updateWikiPage(ctx context.Context, doer *user_model.User, repo *repo_model
 		Shared: true,
 	}
 
-	if hasMasterBranch {
+	if hasMainBranch {
 		cloneOpts.Branch = DefaultBranch
 	}
 
@@ -127,7 +127,7 @@ func updateWikiPage(ctx context.Context, doer *user_model.User, repo *repo_model
 	}
 	defer gitRepo.Close()
 
-	if hasMasterBranch {
+	if hasMainBranch {
 		if err := gitRepo.ReadTreeToIndex("HEAD"); err != nil {
 			log.Error("Unable to read HEAD tree to index in: %s %v", basePath, err)
 			return fmt.Errorf("fnable to read HEAD tree to index in: %s %w", basePath, err)
@@ -199,7 +199,7 @@ func updateWikiPage(ctx context.Context, doer *user_model.User, repo *repo_model
 	} else {
 		commitTreeOpts.NoGPGSign = true
 	}
-	if hasMasterBranch {
+	if hasMainBranch {
 		commitTreeOpts.Parents = []string{"HEAD"}
 	}
 

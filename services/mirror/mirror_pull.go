@@ -86,7 +86,7 @@ type mirrorSyncResult struct {
 // possible output example:
 /*
 // * [new tag]         v0.1.8     -> v0.1.8
-// * [new branch]      master     -> origin/master
+// * [new branch]      main     -> origin/main
 // - [deleted]         (none)     -> origin/test // delete a branch
 // - [deleted]         (none)     -> 1 // delete a tag
 //   957a993..a87ba5f  test       -> origin/test
