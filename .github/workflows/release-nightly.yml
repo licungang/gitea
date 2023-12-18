@@ -57,17 +57,13 @@ jobs:
       - name: upload binaries to s3
         run: |
           aws s3 sync dist/release s3://${{ secrets.AWS_S3_BUCKET }}/gitea/${{ steps.clean_name.outputs.branch }} --no-progress
-  nightly-docker-rootful:
+  nightly-docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # fetch all commits instead of only the last as some branches are long lived and could have many between versions
       # fetch all tags to ensure that "git describe" reports expected Gitea version, eg. v1.21.0-dev-1-g1234567
       - run: git fetch --unshallow --quiet --tags --force
-      - uses: actions/setup-go@v4
-        with:
-          go-version-file: go.mod
-          check-latest: true
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Get cleaned branch name
@@ -80,55 +76,38 @@ jobs:
           fi
           REF_NAME=$(echo "${{ github.ref }}" | sed -e 's/refs\/heads\///' -e 's/refs\/tags\///' -e 's/release\/v//')
           echo "branch=${REF_NAME}-nightly" >> "$GITHUB_OUTPUT"
+      - name: Get nightly version
+        run: |
+          NIGHTLY_VERSION="$(git describe --tags --always | sed 's/-/+/' | sed 's/^v//')"
+          echo "NIGHTLY_VERSION=${NIGHTLY_VERSION}" >> "${GITHUB_ENV}"
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: fetch go modules
-        run: make vendor
       - name: build rootful docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          target: gitea
+          build-args: |
+            GITHUB_REF_NAME=${{ env.GITHUB_REF_NAME }}
+            GITHUB_REF_TYPE=${{ env.GITHUB_REF_TYPE }}
+            DOCKER_GITEA_VERSION=${{ env.NIGHTLY_VERSION }}
           platforms: linux/amd64,linux/arm64
+          pull: true
           push: true
           tags: gitea/gitea:${{ steps.clean_name.outputs.branch }}
-  nightly-docker-rootless:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # fetch all commits instead of only the last as some branches are long lived and could have many between versions
-      # fetch all tags to ensure that "git describe" reports expected Gitea version, eg. v1.21.0-dev-1-g1234567
-      - run: git fetch --unshallow --quiet --tags --force
-      - uses: actions/setup-go@v4
-        with:
-          go-version-file: go.mod
-          check-latest: true
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - name: Get cleaned branch name
-        id: clean_name
-        run: |
-          # if main then say nightly otherwise cleanup name
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            echo "branch=nightly" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          REF_NAME=$(echo "${{ github.ref }}" | sed -e 's/refs\/heads\///' -e 's/refs\/tags\///' -e 's/release\/v//')
-          echo "branch=${REF_NAME}-nightly" >> "$GITHUB_OUTPUT"
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: fetch go modules
-        run: make vendor
       - name: build rootless docker image
         uses: docker/build-push-action@v5
         with:
           context: .
+          target: gitea-rootless
+          build-args: |
+            GITHUB_REF_NAME=${{ env.GITHUB_REF_NAME }}
+            GITHUB_REF_TYPE=${{ env.GITHUB_REF_TYPE }}
+            DOCKER_GITEA_VERSION=${{ env.NIGHTLY_VERSION }}
           platforms: linux/amd64,linux/arm64
+          pull: true
           push: true
-          file: Dockerfile.rootless
           tags: gitea/gitea:${{ steps.clean_name.outputs.branch }}-rootless
