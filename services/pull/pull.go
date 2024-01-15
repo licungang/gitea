@@ -4,6 +4,7 @@
 package pull
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -125,7 +126,7 @@ func NewPullRequest(ctx context.Context, repo *repo_model.Repository, issue *iss
 			return err
 		}
 
-		if !pr.IsWorkInProgress() {
+		if !pr.IsWorkInProgress(ctx) {
 			if err := issues_model.PullRequestCodeOwnersReview(ctx, issue, pr); err != nil {
 				return err
 			}
@@ -152,14 +153,12 @@ func NewPullRequest(ctx context.Context, repo *repo_model.Repository, issue *iss
 	if issue.Milestone != nil {
 		notify_service.IssueChangeMilestone(ctx, issue.Poster, issue, 0)
 	}
-	if len(assigneeIDs) > 0 {
-		for _, assigneeID := range assigneeIDs {
-			assignee, err := user_model.GetUserByID(ctx, assigneeID)
-			if err != nil {
-				return ErrDependenciesLeft
-			}
-			notify_service.IssueChangeAssignee(ctx, issue.Poster, issue, assignee, false, assigneeCommentMap[assigneeID])
+	for _, assigneeID := range assigneeIDs {
+		assignee, err := user_model.GetUserByID(ctx, assigneeID)
+		if err != nil {
+			return ErrDependenciesLeft
 		}
+		notify_service.IssueChangeAssignee(ctx, issue.Poster, issue, assignee, false, assigneeCommentMap[assigneeID])
 	}
 
 	return nil
@@ -329,14 +328,15 @@ func AddTestPullRequestTask(doer *user_model.User, repoID int64, branch string, 
 			}
 			if err == nil {
 				for _, pr := range prs {
-					if newCommitID != "" && newCommitID != git.EmptySHA {
+					objectFormat, _ := git.GetObjectFormatOfRepo(ctx, pr.BaseRepo.RepoPath())
+					if newCommitID != "" && newCommitID != objectFormat.EmptyObjectID().String() {
 						changed, err := checkIfPRContentChanged(ctx, pr, oldCommitID, newCommitID)
 						if err != nil {
 							log.Error("checkIfPRContentChanged: %v", err)
 						}
 						if changed {
 							// Mark old reviews as stale if diff to mergebase has changed
-							if err := issues_model.MarkReviewsAsStale(pr.IssueID); err != nil {
+							if err := issues_model.MarkReviewsAsStale(ctx, pr.IssueID); err != nil {
 								log.Error("MarkReviewsAsStale: %v", err)
 							}
 
@@ -351,7 +351,7 @@ func AddTestPullRequestTask(doer *user_model.User, repoID int64, branch string, 
 								}
 							}
 						}
-						if err := issues_model.MarkReviewsAsNotStale(pr.IssueID, newCommitID); err != nil {
+						if err := issues_model.MarkReviewsAsNotStale(ctx, pr.IssueID, newCommitID); err != nil {
 							log.Error("MarkReviewsAsNotStale: %v", err)
 						}
 						divergence, err := GetDiverging(ctx, pr)
@@ -423,9 +423,11 @@ func checkIfPRContentChanged(ctx context.Context, pr *issues_model.PullRequest, 
 		return false, fmt.Errorf("unable to open pipe for to run diff: %w", err)
 	}
 
+	stderr := new(bytes.Buffer)
 	if err := cmd.Run(&git.RunOpts{
 		Dir:    prCtx.tmpBasePath,
 		Stdout: stdoutWriter,
+		Stderr: stderr,
 		PipelineFunc: func(ctx context.Context, cancel context.CancelFunc) error {
 			_ = stdoutWriter.Close()
 			defer func() {
@@ -437,6 +439,7 @@ func checkIfPRContentChanged(ctx context.Context, pr *issues_model.PullRequest, 
 		if err == util.ErrNotEmpty {
 			return true, nil
 		}
+		err = git.ConcatenateError(err, stderr.String())
 
 		log.Error("Unable to run diff on %s %s %s in tempRepo for PR[%d]%s/%s...%s/%s: Error: %v",
 			newCommitID, oldCommitID, base,
@@ -813,7 +816,7 @@ func GetIssuesAllCommitStatus(ctx context.Context, issues issues_model.IssueList
 			gitRepos[issue.RepoID] = gitRepo
 		}
 
-		statuses, lastStatus, err := getAllCommitStatus(gitRepo, issue.PullRequest)
+		statuses, lastStatus, err := getAllCommitStatus(ctx, gitRepo, issue.PullRequest)
 		if err != nil {
 			log.Error("getAllCommitStatus: cant get commit statuses of pull [%d]: %v", issue.PullRequest.ID, err)
 			continue
@@ -825,13 +828,13 @@ func GetIssuesAllCommitStatus(ctx context.Context, issues issues_model.IssueList
 }
 
 // getAllCommitStatus get pr's commit statuses.
-func getAllCommitStatus(gitRepo *git.Repository, pr *issues_model.PullRequest) (statuses []*git_model.CommitStatus, lastStatus *git_model.CommitStatus, err error) {
+func getAllCommitStatus(ctx context.Context, gitRepo *git.Repository, pr *issues_model.PullRequest) (statuses []*git_model.CommitStatus, lastStatus *git_model.CommitStatus, err error) {
 	sha, shaErr := gitRepo.GetRefCommitID(pr.GetGitRefName())
 	if shaErr != nil {
 		return nil, nil, shaErr
 	}
 
-	statuses, _, err = git_model.GetLatestCommitStatus(db.DefaultContext, pr.BaseRepo.ID, sha, db.ListOptions{ListAll: true})
+	statuses, _, err = git_model.GetLatestCommitStatus(ctx, pr.BaseRepo.ID, sha, db.ListOptions{ListAll: true})
 	lastStatus = git_model.CalcCommitStatus(statuses)
 	return statuses, lastStatus, err
 }

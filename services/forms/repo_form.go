@@ -51,6 +51,9 @@ type CreateRepoForm struct {
 	Labels          bool
 	ProtectedBranch bool
 	TrustModel      string
+
+	ForkSingleBranch string
+	ObjectFormatName string
 }
 
 // Validate validates the fields
@@ -209,6 +212,7 @@ type ProtectBranchForm struct {
 	BlockOnOfficialReviewRequests bool
 	BlockOnOutdatedBranch         bool
 	DismissStaleApprovals         bool
+	IgnoreStaleApprovals          bool
 	RequireSignedCommits          bool
 	ProtectedFilePatterns         string
 	UnprotectedFilePatterns       string

@@ -14,7 +14,7 @@
   "swagger": "2.0",
   "info": {
     "description": "This documentation describes the Gitea API.",
-    "title": "Gitea API.",
+    "title": "Gitea API",
     "license": {
       "name": "MIT",
       "url": "http://opensource.org/licenses/MIT"
@@ -392,6 +392,23 @@
         }
       }
     },
+    "/admin/runners/registration-token": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get an global actions runner registration token",
+        "operationId": "adminGetRunnerRegistrationToken",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/RegistrationToken"
+          }
+        }
+      }
+    },
     "/admin/unadopted": {
       "get": {
         "produces": [
@@ -659,6 +676,9 @@
         "responses": {
           "200": {
             "$ref": "#/responses/User"
+          },
+          "400": {
+            "$ref": "#/responses/error"
           },
           "403": {
             "$ref": "#/responses/forbidden"
@@ -1558,6 +1578,32 @@
           },
           "404": {
             "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/orgs/{org}/actions/runners/registration-token": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "organization"
+        ],
+        "summary": "Get an organization's actions runner registration token",
+        "operationId": "orgGetRunnerRegistrationToken",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "name of the organization",
+            "name": "org",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/RegistrationToken"
           }
         }
       }
@@ -5239,6 +5285,18 @@
             "name": "sha",
             "in": "path",
             "required": true
+          },
+          {
+            "type": "boolean",
+            "description": "include verification for every commit (disable for speedup, default 'true')",
+            "name": "verification",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "include a list of affected files for every commit (disable for speedup, default 'true')",
+            "name": "files",
+            "in": "query"
           }
         ],
         "responses": {
@@ -10521,6 +10579,18 @@
             "description": "page size of results",
             "name": "limit",
             "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "include verification for every commit (disable for speedup, default 'true')",
+            "name": "verification",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "include a list of affected files for every commit (disable for speedup, default 'true')",
+            "name": "files",
+            "in": "query"
           }
         ],
         "responses": {
@@ -11706,12 +11776,6 @@
           },
           {
             "type": "integer",
-            "description": "page size of results, deprecated - use limit",
-            "name": "per_page",
-            "in": "query"
-          },
-          {
-            "type": "integer",
             "description": "page number of results to return (1-based)",
             "name": "page",
             "in": "query"
@@ -12337,6 +12401,39 @@
           },
           "404": {
             "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
+    "/repos/{owner}/{repo}/runners/registration-token": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Get a repository's actions runner registration token",
+        "operationId": "repoGetRunnerRegistrationToken",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "owner of the repo",
+            "name": "owner",
+            "in": "path",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "name of the repo",
+            "name": "repo",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/RegistrationToken"
           }
         }
       }
@@ -14495,6 +14592,23 @@
         "responses": {
           "200": {
             "$ref": "#/responses/User"
+          }
+        }
+      }
+    },
+    "/user/actions/runners/registration-token": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "user"
+        ],
+        "summary": "Get an user's actions runner registration token",
+        "operationId": "userGetRunnerRegistrationToken",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/RegistrationToken"
           }
         }
       }
@@ -16906,6 +17020,10 @@
           "type": "boolean",
           "x-go-name": "EnableStatusCheck"
         },
+        "ignore_stale_approvals": {
+          "type": "boolean",
+          "x-go-name": "IgnoreStaleApprovals"
+        },
         "merge_whitelist_teams": {
           "type": "array",
           "items": {
@@ -17546,6 +17664,10 @@
         "enable_status_check": {
           "type": "boolean",
           "x-go-name": "EnableStatusCheck"
+        },
+        "ignore_stale_approvals": {
+          "type": "boolean",
+          "x-go-name": "IgnoreStaleApprovals"
         },
         "merge_whitelist_teams": {
           "type": "array",
@@ -18388,8 +18510,7 @@
       "type": "object",
       "required": [
         "username",
-        "email",
-        "password"
+        "email"
       ],
       "properties": {
         "created_at": {
@@ -18678,6 +18799,10 @@
         "enable_status_check": {
           "type": "boolean",
           "x-go-name": "EnableStatusCheck"
+        },
+        "ignore_stale_approvals": {
+          "type": "boolean",
+          "x-go-name": "IgnoreStaleApprovals"
         },
         "merge_whitelist_teams": {
           "type": "array",
@@ -21099,6 +21224,10 @@
         "creator": {
           "$ref": "#/definitions/User"
         },
+        "html_url": {
+          "type": "string",
+          "x-go-name": "HTMLURL"
+        },
         "id": {
           "type": "integer",
           "format": "int64",
@@ -21646,6 +21775,7 @@
       "properties": {
         "created": {
           "type": "string",
+          "format": "date-time",
           "x-go-name": "CreatedUnix"
         },
         "interval": {
@@ -21658,6 +21788,7 @@
         },
         "last_update": {
           "type": "string",
+          "format": "date-time",
           "x-go-name": "LastUpdateUnix"
         },
         "remote_address": {
@@ -22111,6 +22242,10 @@
           "type": "string",
           "format": "date-time",
           "x-go-name": "Updated"
+        },
+        "url": {
+          "type": "string",
+          "x-go-name": "URL"
         },
         "watchers_count": {
           "type": "integer",
@@ -23699,6 +23834,14 @@
         }
       }
     },
+    "RegistrationToken": {
+      "description": "RegistrationToken is response related to registeration token",
+      "headers": {
+        "token": {
+          "type": "string"
+        }
+      }
+    },
     "Release": {
       "description": "Release",
       "schema": {
@@ -24018,6 +24161,7 @@
   },
   "securityDefinitions": {
     "AccessToken": {
+      "description": "This authentication option is deprecated for removal in Gitea 1.23. Please use AuthorizationHeaderToken instead.",
       "type": "apiKey",
       "name": "access_token",
       "in": "query"
@@ -24050,6 +24194,7 @@
       "in": "header"
     },
     "Token": {
+      "description": "This authentication option is deprecated for removal in Gitea 1.23. Please use AuthorizationHeaderToken instead.",
       "type": "apiKey",
       "name": "token",
       "in": "query"
