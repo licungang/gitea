@@ -6,6 +6,7 @@ package org
 
 import (
 	"net/http"
+	"net/url"
 
 	"code.gitea.io/gitea/models"
 	"code.gitea.io/gitea/models/organization"
@@ -14,11 +15,13 @@ import (
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/setting"
 	shared_user "code.gitea.io/gitea/routers/web/shared/user"
+	org_service "code.gitea.io/gitea/services/org"
 )
 
 const (
 	// tplMembers template for organization members page
-	tplMembers base.TplName = "org/member/members"
+	tplMembers       base.TplName = "org/member/members"
+	tplMembersInvite base.TplName = "org/member/invite"
 )
 
 // Members render organization users page
@@ -74,6 +77,48 @@ func Members(ctx *context.Context) {
 	ctx.Data["MembersTwoFaStatus"] = members.GetTwoFaStatus(ctx)
 
 	ctx.HTML(http.StatusOK, tplMembers)
+}
+
+// MembersInvite render organization members invite page
+func MembersInvite(ctx *context.Context) {
+	org := ctx.Org.Organization
+	ctx.Data["Title"] = org.FullName
+	ctx.Data["PageIsOrgMembers"] = true
+	ctx.Data["Teams"] = ctx.Org.Teams
+	ctx.Data["IsEmailInviteEnabled"] = setting.MailService != nil
+	if err := shared_user.LoadHeaderCount(ctx); err != nil {
+		ctx.ServerError("LoadHeaderCount", err)
+		return
+	}
+	ctx.HTML(http.StatusOK, tplMembersInvite)
+}
+
+// MembersInviteAction response for invite a member to organization
+func MembersInviteAction(ctx *context.Context) {
+	var err error
+	if !ctx.Org.IsOwner {
+		ctx.Error(http.StatusNotFound)
+		return
+	}
+	var team *organization.Team
+	team, err = organization.GetTeam(ctx, ctx.Org.Organization.ID, ctx.FormString("team"))
+	if err != nil {
+		if organization.IsErrTeamNotExist(err) {
+			ctx.Flash.Error(ctx.Tr("form.team_not_exist"))
+		} else {
+			ctx.ServerError("GetTeam", err)
+		}
+		return
+	}
+	var isServerError bool
+	isServerError, err = org_service.AddTeamMember(ctx, ctx.Doer, team, ctx.FormString("uname"), ctx.Locale)
+	if isServerError {
+		ctx.ServerError("AddTeamMember", err)
+		return
+	} else if err != nil {
+		ctx.Flash.Error(err.Error())
+	}
+	ctx.Redirect(ctx.Org.OrgLink + "/teams/" + url.PathEscape(team.LowerName))
 }
 
 // MembersAction response for operation to a member of organization

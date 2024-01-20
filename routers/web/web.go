@@ -835,6 +835,8 @@ func registerRoutes(m *web.Route) {
 	m.Group("/org", func() {
 		m.Group("/{org}", func() {
 			m.Get("/members", org.Members)
+			m.Get("/members/invite", org.MembersInvite)
+			m.Post("/members/invite", org.MembersInviteAction)
 		}, context.OrgAssignment())
 	}, ignSignIn)
 
