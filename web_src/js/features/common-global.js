@@ -35,15 +35,18 @@ export function initHeadNavbarContentToggle() {
   });
 }
 
-export function initFootLanguageMenu() {
-  function linkLanguageAction() {
-    const $this = $(this);
-    $.get($this.data('url')).always(() => {
+export function initFooterMenus() {
+  $('.language-menu a[lang]').on('click', function() {
+    $.get($(this).data('url')).always(() => {
       window.location.reload();
     });
-  }
-
-  $('.language-menu a[lang]').on('click', linkLanguageAction);
+  });
+  $('.theme-menu .item').on('click', async (e) => {
+    const res = await POST(`${appSubUrl}/user/settings/appearance/theme`, {
+      data: new URLSearchParams({theme: e.target.getAttribute('data-value')}),
+    });
+    if (res.ok) window.location.reload();
+  });
 }
 
 export function initGlobalEnterQuickSubmit() {
