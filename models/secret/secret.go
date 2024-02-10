@@ -64,8 +64,8 @@ func init() {
 }
 
 func (s *Secret) Validate() error {
-	if s.OwnerID == 0 && s.RepoID == 0 {
-		return errors.New("the secret is not bound to any scope")
+	if s.OwnerID != 0 && s.RepoID != 0 {
+		return errors.New("a secret should not be bound to an owner and a repository at the same time")
 	}
 	return nil
 }
@@ -80,12 +80,8 @@ type FindSecretsOptions struct {
 
 func (opts FindSecretsOptions) ToConds() builder.Cond {
 	cond := builder.NewCond()
-	if opts.OwnerID > 0 {
-		cond = cond.And(builder.Eq{"owner_id": opts.OwnerID})
-	}
-	if opts.RepoID > 0 {
-		cond = cond.And(builder.Eq{"repo_id": opts.RepoID})
-	}
+	cond = cond.And(builder.Eq{"owner_id": opts.OwnerID})
+	cond = cond.And(builder.Eq{"repo_id": opts.RepoID})
 	if opts.SecretID != 0 {
 		cond = cond.And(builder.Eq{"id": opts.SecretID})
 	}

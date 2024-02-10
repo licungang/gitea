@@ -67,7 +67,7 @@ func ListActionsSecrets(ctx *context.APIContext) {
 	ctx.JSON(http.StatusOK, apiSecrets)
 }
 
-// create or update one secret of the organization
+// CreateOrUpdateSecret create or update one secret in an organization
 func CreateOrUpdateSecret(ctx *context.APIContext) {
 	// swagger:operation PUT /orgs/{org}/actions/secrets/{secretname} organization updateOrgSecret
 	// ---
@@ -93,9 +93,9 @@ func CreateOrUpdateSecret(ctx *context.APIContext) {
 	//     "$ref": "#/definitions/CreateOrUpdateSecretOption"
 	// responses:
 	//   "201":
-	//     description: response when creating a secret
+	//     description: secret created
 	//   "204":
-	//     description: response when updating a secret
+	//     description: secret updated
 	//   "400":
 	//     "$ref": "#/responses/error"
 	//   "404":
@@ -122,7 +122,7 @@ func CreateOrUpdateSecret(ctx *context.APIContext) {
 	}
 }
 
-// DeleteSecret delete one secret of the organization
+// DeleteSecret delete one secret in an organization
 func DeleteSecret(ctx *context.APIContext) {
 	// swagger:operation DELETE /orgs/{org}/actions/secrets/{secretname} organization deleteOrgSecret
 	// ---
@@ -144,7 +144,7 @@ func DeleteSecret(ctx *context.APIContext) {
 	//   required: true
 	// responses:
 	//   "204":
-	//     description: delete one secret of the organization
+	//     description: secret deleted
 	//   "400":
 	//     "$ref": "#/responses/error"
 	//   "404":

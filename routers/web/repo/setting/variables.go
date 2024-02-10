@@ -32,6 +32,7 @@ type variablesCtx struct {
 	RedirectLink      string
 }
 
+//nolint:dupl
 func getVariablesCtx(ctx *context.Context) (*variablesCtx, error) {
 	if ctx.Data["PageIsRepoSettings"] == true {
 		return &variablesCtx{

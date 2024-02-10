@@ -1,7 +1,7 @@
 // Copyright 2023 The Gitea Authors. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-package repo
+package admin
 
 import (
 	"errors"
@@ -14,26 +14,16 @@ import (
 	secret_service "code.gitea.io/gitea/services/secrets"
 )
 
-// CreateOrUpdateSecret create or update one secret in a repository
+// CreateOrUpdateSecret create or update one secret in instance scope
 func CreateOrUpdateSecret(ctx *context.APIContext) {
-	// swagger:operation PUT /repos/{owner}/{repo}/actions/secrets/{secretname} repository updateRepoSecret
+	// swagger:operation PUT /admin/actions/secrets/{secretname} admin updateAdminSecret
 	// ---
-	// summary: Create or Update a secret value in a repository
+	// summary: Create or Update a secret value in instance scope
 	// consumes:
 	// - application/json
 	// produces:
 	// - application/json
 	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repository
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
 	// - name: secretname
 	//   in: path
 	//   description: name of the secret
@@ -53,11 +43,9 @@ func CreateOrUpdateSecret(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	repo := ctx.Repo.Repository
-
 	opt := web.GetForm(ctx).(*api.CreateOrUpdateSecretOption)
 
-	_, created, err := secret_service.CreateOrUpdateSecret(ctx, 0, repo.ID, ctx.Params("secretname"), opt.Data)
+	_, created, err := secret_service.CreateOrUpdateSecret(ctx, 0, 0, ctx.Params("secretname"), opt.Data)
 	if err != nil {
 		if errors.Is(err, util.ErrInvalidArgument) {
 			ctx.Error(http.StatusBadRequest, "CreateOrUpdateSecret", err)
@@ -76,26 +64,16 @@ func CreateOrUpdateSecret(ctx *context.APIContext) {
 	}
 }
 
-// DeleteSecret delete one secret in a repository
+// DeleteSecret delete one secret in instance scope
 func DeleteSecret(ctx *context.APIContext) {
-	// swagger:operation DELETE /repos/{owner}/{repo}/actions/secrets/{secretname} repository deleteRepoSecret
+	// swagger:operation DELETE /admin/actions/secrets/{secretname} admin deleteAdminSecret
 	// ---
-	// summary: Delete a secret in a repository
+	// summary: Delete a secret in instance scope
 	// consumes:
 	// - application/json
 	// produces:
 	// - application/json
 	// parameters:
-	// - name: owner
-	//   in: path
-	//   description: owner of the repository
-	//   type: string
-	//   required: true
-	// - name: repo
-	//   in: path
-	//   description: name of the repository
-	//   type: string
-	//   required: true
 	// - name: secretname
 	//   in: path
 	//   description: name of the secret
@@ -109,9 +87,7 @@ func DeleteSecret(ctx *context.APIContext) {
 	//   "404":
 	//     "$ref": "#/responses/notFound"
 
-	repo := ctx.Repo.Repository
-
-	err := secret_service.DeleteSecretByName(ctx, 0, repo.ID, ctx.Params("secretname"))
+	err := secret_service.DeleteSecretByName(ctx, 0, 0, ctx.Params("secretname"))
 	if err != nil {
 		if errors.Is(err, util.ErrInvalidArgument) {
 			ctx.Error(http.StatusBadRequest, "DeleteSecret", err)

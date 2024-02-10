@@ -16,9 +16,10 @@ import (
 
 const (
 	// TODO: Separate secrets from runners when layout is ready
-	tplRepoSecrets base.TplName = "repo/settings/actions"
-	tplOrgSecrets  base.TplName = "org/settings/actions"
-	tplUserSecrets base.TplName = "user/settings/actions"
+	tplRepoSecrets  base.TplName = "repo/settings/actions"
+	tplOrgSecrets   base.TplName = "org/settings/actions"
+	tplUserSecrets  base.TplName = "user/settings/actions"
+	tplAdminSecrets base.TplName = "admin/actions"
 )
 
 type secretsCtx struct {
@@ -27,10 +28,12 @@ type secretsCtx struct {
 	IsRepo          bool
 	IsOrg           bool
 	IsUser          bool
+	IsGlobal        bool
 	SecretsTemplate base.TplName
 	RedirectLink    string
 }
 
+//nolint:dupl
 func getSecretsCtx(ctx *context.Context) (*secretsCtx, error) {
 	if ctx.Data["PageIsRepoSettings"] == true {
 		return &secretsCtx{
@@ -64,6 +67,16 @@ func getSecretsCtx(ctx *context.Context) (*secretsCtx, error) {
 			IsUser:          true,
 			SecretsTemplate: tplUserSecrets,
 			RedirectLink:    setting.AppSubURL + "/user/settings/actions/secrets",
+		}, nil
+	}
+
+	if ctx.Data["PageIsAdmin"] == true {
+		return &secretsCtx{
+			OwnerID:         0,
+			RepoID:          0,
+			IsGlobal:        true,
+			SecretsTemplate: tplAdminSecrets,
+			RedirectLink:    setting.AppSubURL + "/admin/actions/secrets",
 		}, nil
 	}
 

@@ -948,7 +948,6 @@ func Routes() *web.Route {
 				Post(bind(api.CreateEmailOption{}), user.AddEmail).
 				Delete(bind(api.DeleteEmailOption{}), user.DeleteEmail)
 
-			// manage user-level actions features
 			m.Group("/actions", func() {
 				m.Group("/secrets", func() {
 					m.Combo("/{secretname}").
@@ -1499,6 +1498,11 @@ func Routes() *web.Route {
 		}, tokenRequiresScopes(auth_model.AccessTokenScopeCategoryOrganization), orgAssignment(false, true), reqToken(), reqTeamMembership())
 
 		m.Group("/admin", func() {
+			m.Group("/actions/secrets", func() {
+				m.Combo("/{secretname}").
+					Put(bind(api.CreateOrUpdateSecretOption{}), admin.CreateOrUpdateSecret).
+					Delete(admin.DeleteSecret)
+			})
 			m.Group("/cron", func() {
 				m.Get("", admin.ListCronTasks)
 				m.Post("/{task}", admin.PostCronTask)

@@ -68,18 +68,24 @@ func getSecretsOfTask(ctx context.Context, task *actions_model.ActionTask) map[s
 		return secrets
 	}
 
-	ownerSecrets, err := db.Find[secret_model.Secret](ctx, secret_model.FindSecretsOptions{OwnerID: task.Job.Run.Repo.OwnerID})
+	globalSecrets, err := db.Find[secret_model.Secret](ctx, secret_model.FindSecretsOptions{OwnerID: 0, RepoID: 0})
+	if err != nil {
+		log.Error("find global secrets: %v", err)
+		// go on
+	}
+	ownerSecrets, err := db.Find[secret_model.Secret](ctx, secret_model.FindSecretsOptions{OwnerID: task.Job.Run.Repo.OwnerID, RepoID: 0})
 	if err != nil {
 		log.Error("find secrets of owner %v: %v", task.Job.Run.Repo.OwnerID, err)
 		// go on
 	}
-	repoSecrets, err := db.Find[secret_model.Secret](ctx, secret_model.FindSecretsOptions{RepoID: task.Job.Run.RepoID})
+	repoSecrets, err := db.Find[secret_model.Secret](ctx, secret_model.FindSecretsOptions{OwnerID: 0, RepoID: task.Job.Run.RepoID})
 	if err != nil {
 		log.Error("find secrets of repo %v: %v", task.Job.Run.RepoID, err)
 		// go on
 	}
 
-	for _, secret := range append(ownerSecrets, repoSecrets...) {
+	// Level precedence: Repo > Org / User > Global
+	for _, secret := range append(globalSecrets, append(ownerSecrets, repoSecrets...)...) {
 		if v, err := secret_module.DecryptSecret(setting.SecretKey, secret.Data); err != nil {
 			log.Error("decrypt secret %v %q: %v", secret.ID, secret.Name, err)
 			// go on
