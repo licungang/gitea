@@ -14,7 +14,6 @@ import (
 	"code.gitea.io/gitea/modules/context"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/util"
-	packages_service "code.gitea.io/gitea/services/packages"
 	packages_cleanup_service "code.gitea.io/gitea/services/packages/cleanup"
 )
 
@@ -93,8 +92,14 @@ func DeletePackageVersion(ctx *context.Context) {
 		return
 	}
 
-	if err := packages_service.RemovePackageVersion(ctx, ctx.Doer, pv); err != nil {
-		ctx.ServerError("RemovePackageVersion", err)
+	pd, err := packages_model.GetPackageDescriptor(ctx, pv)
+	if err != nil {
+		ctx.ServerError("GetPackageDescriptor", err)
+		return
+	}
+
+	if err := packages_cleanup_service.RemovePackageVersionOutOfContext(ctx, ctx.Doer, pd); err != nil {
+		ctx.ServerError("RemovePackageVersionOutOfContext", err)
 		return
 	}
 

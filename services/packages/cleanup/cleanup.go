@@ -191,3 +191,33 @@ func CleanupExpiredData(outerCtx context.Context, olderThan time.Duration) error
 
 	return nil
 }
+
+// RemovePackageVersionOutOfContext performs actions according to the package type after a package was deleted
+// These actions are only needed if a package gets deleted outside of the defined
+// package registry flow, for example when deleting a package from the UI or API.
+func RemovePackageVersionOutOfContext(ctx context.Context, doer *user_model.User, pd *packages_model.PackageDescriptor) error {
+	if err := packages_service.RemovePackageVersion(ctx, doer, pd.Version); err != nil {
+		return err
+	}
+
+	switch pd.Package.Type {
+	case packages_model.TypeAlpine:
+		if err := alpine_service.BuildAllRepositoryFiles(ctx, pd.Owner.ID); err != nil {
+			return fmt.Errorf("alpine.BuildAllRepositoryFiles failed: %w", err)
+		}
+	case packages_model.TypeCargo:
+		if err := cargo_service.UpdatePackageIndexIfExists(ctx, doer, pd.Owner, pd.Package.ID); err != nil {
+			return fmt.Errorf("cargo.UpdatePackageIndexIfExists failed: %w", err)
+		}
+	case packages_model.TypeDebian:
+		if err := debian_service.BuildAllRepositoryFiles(ctx, pd.Owner.ID); err != nil {
+			return fmt.Errorf("debian.BuildAllRepositoryFiles failed: %w", err)
+		}
+	case packages_model.TypeRpm:
+		if err := rpm_service.BuildAllRepositoryFiles(ctx, pd.Owner.ID); err != nil {
+			return fmt.Errorf("rpm.BuildAllRepositoryFiles failed: %w", err)
+		}
+	}
+
+	return nil
+}

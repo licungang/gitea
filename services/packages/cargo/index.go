@@ -120,6 +120,11 @@ func UpdatePackageIndexIfExists(ctx context.Context, doer, owner *user_model.Use
 
 	p, err := packages_model.GetPackageByID(ctx, packageID)
 	if err != nil {
+		if errors.Is(err, util.ErrNotExist) {
+			// Ignore the package if it does not exist.
+			// This may leave a dirty index which can be rebuild from user settings.
+			return nil
+		}
 		return fmt.Errorf("GetPackageByID[%d]: %w", packageID, err)
 	}
 
@@ -201,11 +206,14 @@ func addOrUpdatePackageIndex(ctx context.Context, t *files_service.TemporaryUplo
 	if err != nil {
 		return err
 	}
+
+	path := BuildPackagePath(p.LowerName)
+
 	if b == nil {
-		return nil
+		return t.RemoveFilesFromIndex(path)
 	}
 
-	return writeObjectToIndex(t, BuildPackagePath(p.LowerName), b)
+	return writeObjectToIndex(t, path, b)
 }
 
 func getOrCreateIndexRepository(ctx context.Context, doer, owner *user_model.User) (*repo_model.Repository, error) {
