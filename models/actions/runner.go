@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"code.gitea.io/gitea/models/db"
+	"code.gitea.io/gitea/models/organization"
 	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/models/shared/types"
 	user_model "code.gitea.io/gitea/models/user"
@@ -108,15 +109,53 @@ func (r *ActionRunner) IsOnline() bool {
 	return false
 }
 
+// EditLink returns edit runner link
+// Should ensure attributes are loaded before call this function
+func (r *ActionRunner) EditLink(admin bool) string {
+	if admin {
+		return fmt.Sprintf("/admin/actions/runners/%d", r.ID)
+	}
+
+	switch r.BelongsToOwnerType() {
+	case types.OwnerTypeSystemGlobal:
+		return fmt.Sprintf("/admin/actions/runners/%d", r.ID)
+	case types.OwnerTypeIndividual:
+		return fmt.Sprintf("/user/settings/actions/runners/%d", r.ID)
+	case types.OwnerTypeRepository:
+		return fmt.Sprintf("%s/settings/actions/runners/%d", r.Repo.Link(), r.ID)
+	case types.OwnerTypeOrganization:
+		return fmt.Sprintf("%s/settings/actions/runners/%d", r.Owner.OrganisationLink(), r.ID)
+	}
+	return ""
+}
+
 // Editable checks if the runner is editable by the user
-func (r *ActionRunner) Editable(ownerID, repoID int64) bool {
-	if ownerID == 0 && repoID == 0 {
-		return true
+func (r *ActionRunner) Editable(ctx context.Context, doer, owner *user_model.User, repo *repo_model.Repository) (bool, error) {
+	if doer == nil {
+		return false, nil
 	}
-	if ownerID > 0 && r.OwnerID == ownerID {
-		return true
+
+	// admin can edit all runners
+	if doer.IsAdmin {
+		return true, nil
 	}
-	return repoID > 0 && r.RepoID == repoID
+
+	switch r.BelongsToOwnerType() {
+	case types.OwnerTypeIndividual:
+		return owner != nil && r.Owner.ID == doer.ID, nil
+	case types.OwnerTypeRepository:
+		return repo != nil && r.RepoID == repo.ID, nil
+	case types.OwnerTypeOrganization:
+		if (repo != nil && r.OwnerID == repo.OwnerID) || (owner != nil && r.OwnerID == owner.ID) {
+			isOrgAdmin, err := organization.IsOrganizationAdmin(ctx, r.OwnerID, doer.ID)
+			if err != nil {
+				return false, err
+			}
+			return isOrgAdmin, nil
+		}
+	}
+
+	return false, nil
 }
 
 // LoadAttributes loads the attributes of the runner
@@ -156,7 +195,9 @@ func init() {
 type FindRunnerOptions struct {
 	db.ListOptions
 	RepoID        int64
+	Repo          *repo_model.Repository
 	OwnerID       int64
+	Owner         *user_model.User
 	Sort          string
 	Filter        string
 	IsOnline      util.OptionalBool

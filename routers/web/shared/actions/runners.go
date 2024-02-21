@@ -8,6 +8,8 @@ import (
 
 	actions_model "code.gitea.io/gitea/models/actions"
 	"code.gitea.io/gitea/models/db"
+	"code.gitea.io/gitea/models/repo"
+	"code.gitea.io/gitea/models/user"
 	"code.gitea.io/gitea/modules/context"
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/util"
@@ -46,8 +48,8 @@ func RunnersList(ctx *context.Context, opts actions_model.FindRunnerOptions) {
 	ctx.Data["Runners"] = runners
 	ctx.Data["Total"] = count
 	ctx.Data["RegistrationToken"] = token.Token
-	ctx.Data["RunnerOwnerID"] = opts.OwnerID
-	ctx.Data["RunnerRepoID"] = opts.RepoID
+	ctx.Data["RunnerOwner"] = opts.Owner
+	ctx.Data["RunnerRepo"] = opts.Repo
 	ctx.Data["SortType"] = opts.Sort
 
 	pager := context.NewPagination(int(count), opts.PageSize, opts.Page, 5)
@@ -56,7 +58,7 @@ func RunnersList(ctx *context.Context, opts actions_model.FindRunnerOptions) {
 }
 
 // RunnerDetails prepares data for runners edit page
-func RunnerDetails(ctx *context.Context, page int, runnerID, ownerID, repoID int64) {
+func RunnerDetails(ctx *context.Context, page int, runnerID int64, owner *user.User, repo *repo.Repository) {
 	runner, err := actions_model.GetRunnerByID(ctx, runnerID)
 	if err != nil {
 		ctx.ServerError("GetRunnerByID", err)
@@ -66,7 +68,10 @@ func RunnerDetails(ctx *context.Context, page int, runnerID, ownerID, repoID int
 		ctx.ServerError("LoadAttributes", err)
 		return
 	}
-	if !runner.Editable(ownerID, repoID) {
+	if editable, err := runner.Editable(ctx, ctx.Doer, owner, repo); err != nil {
+		ctx.ServerError("Editable", err)
+		return
+	} else if !editable {
 		err = errors.New("no permission to edit this runner")
 		ctx.NotFound("RunnerDetails", err)
 		return
@@ -101,14 +106,17 @@ func RunnerDetails(ctx *context.Context, page int, runnerID, ownerID, repoID int
 }
 
 // RunnerDetailsEditPost response for edit runner details
-func RunnerDetailsEditPost(ctx *context.Context, runnerID, ownerID, repoID int64, redirectTo string) {
+func RunnerDetailsEditPost(ctx *context.Context, runnerID int64, redirectTo string, owner *user.User, repo *repo.Repository) {
 	runner, err := actions_model.GetRunnerByID(ctx, runnerID)
 	if err != nil {
 		log.Warn("RunnerDetailsEditPost.GetRunnerByID failed: %v, url: %s", err, ctx.Req.URL)
 		ctx.ServerError("RunnerDetailsEditPost.GetRunnerByID", err)
 		return
 	}
-	if !runner.Editable(ownerID, repoID) {
+	if editable, err := runner.Editable(ctx, ctx.Doer, owner, repo); err != nil {
+		ctx.ServerError("Editable", err)
+		return
+	} else if !editable {
 		ctx.NotFound("RunnerDetailsEditPost.Editable", util.NewPermissionDeniedErrorf("no permission to edit this runner"))
 		return
 	}
