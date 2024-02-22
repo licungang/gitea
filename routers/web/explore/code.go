@@ -16,6 +16,7 @@ import (
 const (
 	// tplExploreCode explore code page template
 	tplExploreCode base.TplName = "explore/code"
+	tplSearchBody  base.TplName = "code/search_body"
 )
 
 // Code render explore code page
@@ -42,8 +43,15 @@ func Code(ctx *context.Context) {
 	ctx.Data["queryType"] = queryType
 	ctx.Data["PageIsViewCode"] = true
 
+	isHtmxRequest := len(ctx.Req.Header.Values("HX-Request")) > 0
+
+	template := tplExploreCode
+	if isHtmxRequest {
+		template = tplSearchBody
+	}
+
 	if keyword == "" {
-		ctx.HTML(http.StatusOK, tplExploreCode)
+		ctx.HTML(http.StatusOK, template)
 		return
 	}
 
@@ -131,5 +139,5 @@ func Code(ctx *context.Context) {
 	pager.AddParam(ctx, "l", "Language")
 	ctx.Data["Page"] = pager
 
-	ctx.HTML(http.StatusOK, tplExploreCode)
+	ctx.HTML(http.StatusOK, template)
 }

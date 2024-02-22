@@ -1,6 +1,5 @@
 import $ from 'jquery';
 import {svg} from '../svg.js';
-import {invertFileFolding} from './file-fold.js';
 import {createTippy} from '../modules/tippy.js';
 import {clippie} from 'clippie';
 import {toAbsoluteUrl} from '../utils.js';
@@ -183,9 +182,6 @@ export function initRepoCodeView() {
       }
     }).trigger('hashchange');
   }
-  $(document).on('click', '.fold-file', ({currentTarget}) => {
-    invertFileFolding(currentTarget.closest('.file-content'), currentTarget);
-  });
   $(document).on('click', '.code-expander-button', async ({currentTarget}) => {
     const url = currentTarget.getAttribute('data-url');
     const query = currentTarget.getAttribute('data-query');
