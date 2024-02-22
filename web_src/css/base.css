@@ -357,6 +357,11 @@ ol.ui.list li,
   border-color: var(--color-secondary);
 }
 
+.ui.dropdown .menu.short {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
 .ui.dropdown .menu > .header:not(.ui) {
   color: var(--color-text);
 }

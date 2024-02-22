@@ -2246,6 +2246,35 @@
         }
       }
     },
+    "/orgs/{org}/languages": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "organization"
+        ],
+        "summary": "Get primary languages and their color",
+        "operationId": "orgListPrimaryLanguages",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "name of the organization to get",
+            "name": "org",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PrimaryLanguageList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
     "/orgs/{org}/members": {
       "get": {
         "produces": [
@@ -3078,6 +3107,23 @@
         "responses": {
           "200": {
             "$ref": "#/responses/IssueList"
+          }
+        }
+      }
+    },
+    "/repos/languages": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "repository"
+        ],
+        "summary": "Get primary languages and their color",
+        "operationId": "repoListPrimaryLanguages",
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PrimaryLanguageList"
           }
         }
       }
@@ -16320,6 +16366,35 @@
         }
       }
     },
+    "/users/{username}/languages": {
+      "get": {
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "user"
+        ],
+        "summary": "Get primary languages and their color",
+        "operationId": "userListPrimaryLanguages",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "username of user to get",
+            "name": "username",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/responses/PrimaryLanguageList"
+          },
+          "404": {
+            "$ref": "#/responses/notFound"
+          }
+        }
+      }
+    },
     "/users/{username}/orgs": {
       "get": {
         "produces": [
@@ -20545,6 +20620,21 @@
       },
       "x-go-package": "code.gitea.io/gitea/modules/structs"
     },
+    "LanguageInfo": {
+      "description": "LanguagesInfo contains information about a Language",
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "x-go-name": "Color"
+        },
+        "name": {
+          "type": "string",
+          "x-go-name": "Name"
+        }
+      },
+      "x-go-package": "code.gitea.io/gitea/modules/structs"
+    },
     "LicenseTemplateInfo": {
       "description": "LicensesInfo contains information about a License",
       "type": "object",
@@ -23758,6 +23848,15 @@
         "type": "array",
         "items": {
           "$ref": "#/definitions/Package"
+        }
+      }
+    },
+    "PrimaryLanguageList": {
+      "description": "PrimaryLanguageList",
+      "schema": {
+        "type": "array",
+        "items": {
+          "$ref": "#/definitions/LanguageInfo"
         }
       }
     },

@@ -745,3 +745,31 @@ func GetUserRepositories(ctx context.Context, opts *SearchRepoOptions) (Reposito
 	repos := make(RepositoryList, 0, opts.PageSize)
 	return repos, count, db.SetSessionPagination(sess, opts).Find(&repos)
 }
+
+func GetPrimaryRepoLanguageList(ctx context.Context, ownerID int64, user *user_model.User) (LanguageStatList, error) {
+	sess := db.GetEngine(ctx).
+		Table("language_stat").
+		Cols("language").
+		Where(builder.Eq{"is_primary": true})
+
+	if ownerID > 0 {
+		ownerIDs, err := FindUserCodeAccessibleOwnerRepoIDs(ctx, ownerID, user)
+		if err != nil {
+			return nil, err
+		}
+
+		sess = sess.In("repo_id", ownerIDs)
+	}
+
+	languageList := make(LanguageStatList, 0)
+
+	err := sess.Distinct("language").
+		OrderBy("language").
+		Find(&languageList)
+	if err != nil {
+		return nil, err
+	}
+
+	languageList.LoadAttributes()
+	return languageList, nil
+}

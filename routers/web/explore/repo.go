@@ -142,10 +142,17 @@ func RenderRepoSearch(ctx *context.Context, opts *RepoSearchOptions) {
 		return
 	}
 
+	programmingLanguages, err := repo_model.GetPrimaryRepoLanguageList(ctx, 0, ctx.Doer)
+	if err != nil {
+		ctx.ServerError("GetPrimaryRepoLanguageList", err)
+		return
+	}
+
 	ctx.Data["Keyword"] = keyword
 	ctx.Data["Total"] = count
 	ctx.Data["Repos"] = repos
 	ctx.Data["IsRepoIndexerEnabled"] = setting.Indexer.RepoIndexerEnabled
+	ctx.Data["ProgrammingLanguages"] = programmingLanguages
 
 	pager := context.NewPagination(int(count), opts.PageSize, page, 5)
 	pager.SetDefaultParams(ctx)

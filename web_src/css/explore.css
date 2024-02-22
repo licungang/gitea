@@ -10,6 +10,23 @@
   margin-right: 5px;
 }
 
+.explore-menu {
+  display: flex;
+  gap: 4px;
+}
+
+@media (max-width: 767.98px) {
+  .explore-menu {
+    flex-direction: column;
+  }
+  .explore-form {
+    align-self: stretch;
+  }
+  .explore-filters {
+    align-self: flex-end;
+  }
+}
+
 .ui.repository.branches .info {
   font-size: 12px;
   color: var(--color-text-light);
