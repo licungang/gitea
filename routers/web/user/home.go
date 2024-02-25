@@ -415,6 +415,8 @@ func buildIssueOverview(ctx *context.Context, unitType unit.Type) {
 		filterMode = issues_model.FilterModeReviewRequested
 	case "reviewed_by":
 		filterMode = issues_model.FilterModeReviewed
+	case "search":
+		filterMode = issues_model.FilterModeSearch
 	case "your_repositories":
 		fallthrough
 	default:
@@ -495,6 +497,18 @@ func buildIssueOverview(ctx *context.Context, unitType unit.Type) {
 		opts.AllPublic = true
 	}
 
+	// Get filter by author id
+	filterByAuthorID, errorParsingAuthorID := strconv.ParseInt(ctx.FormString("author"), 10, 64)
+	if errorParsingAuthorID != nil {
+		filterByAuthorID = 0
+	}
+
+	// Get filter by assignee id
+	filterByAssigneeID, errorParsingAssigneeID := strconv.ParseInt(ctx.FormString("assignee"), 10, 64)
+	if errorParsingAssigneeID != nil {
+		filterByAssigneeID = 0
+	}
+
 	switch filterMode {
 	case issues_model.FilterModeAll:
 	case issues_model.FilterModeYourRepositories:
@@ -508,6 +522,9 @@ func buildIssueOverview(ctx *context.Context, unitType unit.Type) {
 		opts.ReviewRequestedID = ctx.Doer.ID
 	case issues_model.FilterModeReviewed:
 		opts.ReviewedID = ctx.Doer.ID
+	case issues_model.FilterModeSearch:
+		opts.PosterID = filterByAuthorID
+		opts.AssigneeID = filterByAssigneeID
 	}
 
 	// keyword holds the search term entered into the search field.
@@ -625,6 +642,8 @@ func buildIssueOverview(ctx *context.Context, unitType unit.Type) {
 	ctx.Data["SortType"] = sortType
 	ctx.Data["IsShowClosed"] = isShowClosed
 	ctx.Data["SelectLabels"] = selectedLabels
+	ctx.Data["FilterByAuthorID"] = filterByAuthorID
+	ctx.Data["FilterByAssigneeID"] = filterByAssigneeID
 
 	if isShowClosed {
 		ctx.Data["State"] = "closed"
@@ -639,7 +658,8 @@ func buildIssueOverview(ctx *context.Context, unitType unit.Type) {
 	pager.AddParam(ctx, "state", "State")
 	pager.AddParam(ctx, "labels", "SelectLabels")
 	pager.AddParam(ctx, "milestone", "MilestoneID")
-	pager.AddParam(ctx, "assignee", "AssigneeID")
+	pager.AddParam(ctx, "assignee", "FilterByAssigneeID")
+	pager.AddParam(ctx, "author", "FilterByAuthorID")
 	ctx.Data["Page"] = pager
 
 	ctx.HTML(http.StatusOK, tplIssues)
@@ -764,19 +784,6 @@ func UsernameSubRoute(ctx *context.Context) {
 func getUserIssueStats(ctx *context.Context, ctxUser *user_model.User, filterMode int, opts *issue_indexer.SearchOptions) (*issues_model.IssueStats, error) {
 	doerID := ctx.Doer.ID
 
-	opts = opts.Copy(func(o *issue_indexer.SearchOptions) {
-		// If the doer is the same as the context user, which means the doer is viewing his own dashboard,
-		// it's not enough to show the repos that the doer owns or has been explicitly granted access to,
-		// because the doer may create issues or be mentioned in any public repo.
-		// So we need search issues in all public repos.
-		o.AllPublic = doerID == ctxUser.ID
-		o.AssigneeID = nil
-		o.PosterID = nil
-		o.MentionID = nil
-		o.ReviewRequestedID = nil
-		o.ReviewedID = nil
-	})
-
 	var (
 		err error
 		ret = &issues_model.IssueStats{}
@@ -799,6 +806,9 @@ func getUserIssueStats(ctx *context.Context, ctxUser *user_model.User, filterMod
 			openClosedOpts.ReviewRequestedID = &doerID
 		case issues_model.FilterModeReviewed:
 			openClosedOpts.ReviewedID = &doerID
+		case issues_model.FilterModeSearch:
+			openClosedOpts.PosterID = opts.PosterID
+			openClosedOpts.AssigneeID = opts.AssigneeID
 		}
 		openClosedOpts.IsClosed = util.OptionalBoolFalse
 		ret.OpenCount, err = issue_indexer.CountIssues(ctx, openClosedOpts)
