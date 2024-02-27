@@ -160,6 +160,9 @@ func generateRepoCommit(ctx context.Context, repo, templateRepo, generateRepo *r
 		return fmt.Errorf("git clone: %w", err)
 	}
 
+	// Get active submodules from the template
+	submodules := git.GetSubmoduleCommits(ctx, tmpDir)
+
 	if err := util.RemoveAll(path.Join(tmpDir, ".git")); err != nil {
 		return fmt.Errorf("remove git dir: %w", err)
 	}
@@ -234,6 +237,10 @@ func generateRepoCommit(ctx context.Context, repo, templateRepo, generateRepo *r
 		RunStdString(&git.RunOpts{Dir: tmpDir, Env: env}); err != nil {
 		log.Error("Unable to add %v as remote origin to temporary repo to %s: stdout %s\nError: %v", repo, tmpDir, stdout, err)
 		return fmt.Errorf("git remote add: %w", err)
+	}
+
+	if err := git.AddSubmoduleIndexes(ctx, tmpDir, submodules); err != nil {
+		return fmt.Errorf("Failed to add submodules: %v", err)
 	}
 
 	// set default branch based on whether it's specified in the newly generated repo or not
