@@ -20,6 +20,7 @@ import (
 	"code.gitea.io/gitea/modules/git"
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/markup"
+	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/setting"
 	api "code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/timeutil"
@@ -180,7 +181,7 @@ type Repository struct {
 	IsFsckEnabled                   bool               `xorm:"NOT NULL DEFAULT true"`
 	CloseIssuesViaCommitInAnyBranch bool               `xorm:"NOT NULL DEFAULT false"`
 	Topics                          []string           `xorm:"TEXT JSON"`
-	ObjectFormatName                string             `xorm:"-"`
+	ObjectFormatName                string             `xorm:"VARCHAR(6) NOT NULL DEFAULT 'sha1'"`
 
 	TrustModel TrustModelType
 
@@ -194,6 +195,14 @@ type Repository struct {
 
 func init() {
 	db.RegisterModel(new(Repository))
+}
+
+func (repo *Repository) GetName() string {
+	return repo.Name
+}
+
+func (repo *Repository) GetOwnerName() string {
+	return repo.OwnerName
 }
 
 // SanitizedOriginalURL returns a sanitized OriginalURL
@@ -276,10 +285,6 @@ func (repo *Repository) AfterLoad() {
 	repo.NumOpenMilestones = repo.NumMilestones - repo.NumClosedMilestones
 	repo.NumOpenProjects = repo.NumProjects - repo.NumClosedProjects
 	repo.NumOpenActionRuns = repo.NumActionRuns - repo.NumClosedActionRuns
-
-	// this is a temporary behaviour to support old repos, next step is to store the object format in the database
-	// and read from database so this line could be removed. To not depend on git module, we use a constant variable here
-	repo.ObjectFormatName = "sha1"
 }
 
 // LoadAttributes loads attributes of the repository.
@@ -405,6 +410,11 @@ func (repo *Repository) MustGetUnit(ctx context.Context, tp unit.Type) *RepoUnit
 		return &RepoUnit{
 			Type:   tp,
 			Config: new(ActionsConfig),
+		}
+	} else if tp == unit.TypeProjects {
+		return &RepoUnit{
+			Type:   tp,
+			Config: new(ProjectsConfig),
 		}
 	}
 
@@ -584,8 +594,7 @@ func (repo *Repository) CanEnableEditor() bool {
 // DescriptionHTML does special handles to description and return HTML string.
 func (repo *Repository) DescriptionHTML(ctx context.Context) template.HTML {
 	desc, err := markup.RenderDescriptionHTML(&markup.RenderContext{
-		Ctx:       ctx,
-		URLPrefix: repo.HTMLURL(),
+		Ctx: ctx,
 		// Don't use Metas to speedup requests
 	}, repo.Description)
 	if err != nil {
@@ -837,7 +846,7 @@ func (repo *Repository) TemplateRepo(ctx context.Context) *Repository {
 
 type CountRepositoryOptions struct {
 	OwnerID int64
-	Private util.OptionalBool
+	Private optional.Option[bool]
 }
 
 // CountRepositories returns number of repositories.
@@ -849,8 +858,8 @@ func CountRepositories(ctx context.Context, opts CountRepositoryOptions) (int64,
 	if opts.OwnerID > 0 {
 		sess.And("owner_id = ?", opts.OwnerID)
 	}
-	if !opts.Private.IsNone() {
-		sess.And("is_private=?", opts.Private.IsTrue())
+	if opts.Private.Has() {
+		sess.And("is_private=?", opts.Private.Value())
 	}
 
 	count, err := sess.Count(new(Repository))

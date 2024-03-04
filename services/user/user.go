@@ -41,10 +41,7 @@ func RenameUser(ctx context.Context, u *user_model.User, newUserName string) err
 	}
 
 	if newUserName == u.Name {
-		return user_model.ErrUsernameNotChanged{
-			UID:  u.ID,
-			Name: u.Name,
-		}
+		return nil
 	}
 
 	if err := user_model.IsUsableUsername(newUserName); err != nil {
@@ -191,7 +188,7 @@ func DeleteUser(ctx context.Context, u *user_model.User, purge bool) error {
 				break
 			}
 			for _, org := range orgs {
-				if err := models.RemoveOrgUser(ctx, org.ID, u.ID); err != nil {
+				if err := models.RemoveOrgUser(ctx, org, u); err != nil {
 					if organization.IsErrLastOrgOwner(err) {
 						err = org_service.DeleteOrganization(ctx, org, true)
 						if err != nil {

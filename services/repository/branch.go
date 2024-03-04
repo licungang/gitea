@@ -17,12 +17,13 @@ import (
 	repo_model "code.gitea.io/gitea/models/repo"
 	user_model "code.gitea.io/gitea/models/user"
 	"code.gitea.io/gitea/modules/git"
+	"code.gitea.io/gitea/modules/gitrepo"
 	"code.gitea.io/gitea/modules/graceful"
 	"code.gitea.io/gitea/modules/log"
+	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/queue"
 	repo_module "code.gitea.io/gitea/modules/repository"
 	"code.gitea.io/gitea/modules/timeutil"
-	"code.gitea.io/gitea/modules/util"
 	webhook_module "code.gitea.io/gitea/modules/webhook"
 	notify_service "code.gitea.io/gitea/services/notify"
 	files_service "code.gitea.io/gitea/services/repository/files"
@@ -52,7 +53,7 @@ type Branch struct {
 }
 
 // LoadBranches loads branches from the repository limited by page & pageSize.
-func LoadBranches(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository, isDeletedBranch util.OptionalBool, keyword string, page, pageSize int) (*Branch, []*Branch, int64, error) {
+func LoadBranches(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository, isDeletedBranch optional.Option[bool], keyword string, page, pageSize int) (*Branch, []*Branch, int64, error) {
 	defaultDBBranch, err := git_model.GetBranch(ctx, repo.ID, repo.DefaultBranch)
 	if err != nil {
 		return nil, nil, 0, err
@@ -65,15 +66,14 @@ func LoadBranches(ctx context.Context, repo *repo_model.Repository, gitRepo *git
 			Page:     page,
 			PageSize: pageSize,
 		},
-		Keyword: keyword,
+		Keyword:            keyword,
+		ExcludeBranchNames: []string{repo.DefaultBranch},
 	}
 
 	dbBranches, totalNumOfBranches, err := db.FindAndCount[git_model.Branch](ctx, branchOpts)
 	if err != nil {
 		return nil, nil, 0, err
 	}
-
-	branchOpts.ExcludeBranchNames = []string{repo.DefaultBranch}
 
 	if err := git_model.BranchList(dbBranches).LoadDeletedBy(ctx); err != nil {
 		return nil, nil, 0, err
@@ -161,7 +161,7 @@ func loadOneBranch(ctx context.Context, repo *repo_model.Repository, dbBranch *g
 		if pr.HasMerged {
 			baseGitRepo, ok := repoIDToGitRepo[pr.BaseRepoID]
 			if !ok {
-				baseGitRepo, err = git.OpenRepository(ctx, pr.BaseRepo.RepoPath())
+				baseGitRepo, err = gitrepo.OpenRepository(ctx, pr.BaseRepo)
 				if err != nil {
 					return nil, fmt.Errorf("OpenRepository: %v", err)
 				}
@@ -191,13 +191,9 @@ func loadOneBranch(ctx context.Context, repo *repo_model.Repository, dbBranch *g
 	}, nil
 }
 
-func GetBranchCommitID(ctx context.Context, repo *repo_model.Repository, branch string) (string, error) {
-	return git.GetBranchCommitID(ctx, repo.RepoPath(), branch)
-}
-
 // checkBranchName validates branch name with existing repository branches
 func checkBranchName(ctx context.Context, repo *repo_model.Repository, name string) error {
-	_, err := git.WalkReferences(ctx, repo.RepoPath(), func(_, refName string) error {
+	_, err := gitrepo.WalkReferences(ctx, repo, func(_, refName string) error {
 		branchRefName := strings.TrimPrefix(refName, git.BranchPrefix)
 		switch {
 		case branchRefName == name:
@@ -243,7 +239,7 @@ func syncBranchToDB(ctx context.Context, repoID, pusherID int64, branchName stri
 	// we cannot simply insert the branch but need to check we have branches or not
 	hasBranch, err := db.Exist[git_model.Branch](ctx, git_model.FindBranchOptions{
 		RepoID:          repoID,
-		IsDeletedBranch: util.OptionalBoolFalse,
+		IsDeletedBranch: optional.Some(false),
 	}.ToConds())
 	if err != nil {
 		return err
@@ -383,11 +379,6 @@ func DeleteBranch(ctx context.Context, doer *user_model.User, repo *repo_model.R
 		return fmt.Errorf("GetBranch: %vc", err)
 	}
 
-	objectFormat, err := gitRepo.GetObjectFormat()
-	if err != nil {
-		return err
-	}
-
 	if rawBranch.IsDeleted {
 		return nil
 	}
@@ -408,6 +399,8 @@ func DeleteBranch(ctx context.Context, doer *user_model.User, repo *repo_model.R
 	}); err != nil {
 		return err
 	}
+
+	objectFormat := git.ObjectFormatFromName(repo.ObjectFormatName)
 
 	// Don't return error below this
 	if err := PushUpdate(
