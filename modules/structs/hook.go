@@ -490,7 +490,7 @@ func (p *PackagePayload) JSONPayload() ([]byte, error) {
 
 // CommitStatusPayload represents a payload information of commit status event.
 type CommitStatusPayload struct {
-	// TODO: add Branches
+	// TODO: add Branches per https://docs.github.com/en/webhooks/webhook-events-and-payloads#status
 	Commit  *PayloadCommit `json:"commit"`
 	Context string         `json:"context"`
 	// swagger:strfmt date-time
