@@ -591,8 +591,8 @@ func retrieveProjects(ctx *context.Context, repo *repo_model.Repository) {
 
 	projectsUnit := repo.MustGetUnit(ctx, unit.TypeProjects)
 
-	var openProjects []*project_model.Project
-	var closedProjects []*project_model.Project
+	var openProjects project_model.ProjectList
+	var closedProjects project_model.ProjectList
 	var err error
 
 	if projectsUnit.ProjectsConfig().IsProjectsAllowed(repo_model.ProjectsModeRepo) {
@@ -629,6 +629,11 @@ func retrieveProjects(ctx *context.Context, repo *repo_model.Repository) {
 			ctx.ServerError("GetProjects", err)
 			return
 		}
+		openProjects2, err = project_model.ProjectList(openProjects2).FilterWritableByDoer(ctx, repo, ctx.Doer)
+		if err != nil {
+			ctx.ServerError("FilterWritableByDoer", err)
+			return
+		}
 		openProjects = append(openProjects, openProjects2...)
 		closedProjects2, err := db.Find[project_model.Project](ctx, project_model.SearchOptions{
 			ListOptions: db.ListOptionsAll,
@@ -638,6 +643,11 @@ func retrieveProjects(ctx *context.Context, repo *repo_model.Repository) {
 		})
 		if err != nil {
 			ctx.ServerError("GetProjects", err)
+			return
+		}
+		closedProjects2, err = project_model.ProjectList(closedProjects2).FilterWritableByDoer(ctx, repo, ctx.Doer)
+		if err != nil {
+			ctx.ServerError("FilterWritableByDoer", err)
 			return
 		}
 		closedProjects = append(closedProjects, closedProjects2...)
@@ -980,15 +990,22 @@ func NewIssue(ctx *context.Context) {
 	}
 
 	projectID := ctx.FormInt64("project")
-	if projectID > 0 && isProjectsEnabled {
+	if projectID > 0 {
 		project, err := project_model.GetProjectByID(ctx, projectID)
 		if err != nil {
 			log.Error("GetProjectByID: %d: %v", projectID, err)
-		} else if project.RepoID != ctx.Repo.Repository.ID {
-			log.Error("GetProjectByID: %d: %v", projectID, fmt.Errorf("project[%d] not in repo [%d]", project.ID, ctx.Repo.Repository.ID))
 		} else {
-			ctx.Data["project_id"] = projectID
-			ctx.Data["Project"] = project
+			canWriteByDoer, err := project.CanWriteByDoer(ctx, ctx.Repo.Repository, ctx.Doer)
+			if err != nil {
+				log.Error("CanWriteByDoer: %d: %v", projectID, err)
+			} else if !canWriteByDoer {
+				log.Error("CanWriteByDoer: %d: %v", projectID, fmt.Errorf("project[%d] not found", project.ID))
+			} else if project.IsRepositoryProject() && !isProjectsEnabled {
+				log.Error("CanWriteByDoer: %d: %v", projectID, fmt.Errorf("projects is not enabled in repo[%d]", ctx.Repo.Repository.ID))
+			} else {
+				ctx.Data["project_id"] = projectID
+				ctx.Data["Project"] = project
+			}
 		}
 
 		if len(ctx.Req.URL.Query().Get("project")) > 0 {
@@ -1076,6 +1093,7 @@ func NewIssueChooseTemplate(ctx *context.Context) {
 	ctx.Data["IssueConfigError"] = err // ctx.Flash.Err makes problems here
 
 	ctx.Data["milestone"] = ctx.FormInt64("milestone")
+	// TODO: invalid projectid check?
 	ctx.Data["project"] = ctx.FormInt64("project")
 
 	ctx.HTML(http.StatusOK, tplIssueChoose)
@@ -1102,7 +1120,7 @@ func DeleteIssue(ctx *context.Context) {
 }
 
 // ValidateRepoMetas check and returns repository's meta information
-func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull bool) ([]int64, []int64, int64, int64) {
+func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull bool) ([]int64, []int64, int64, int64, string) {
 	var (
 		repo = ctx.Repo.Repository
 		err  error
@@ -1110,7 +1128,7 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 
 	labels := RetrieveRepoMetas(ctx, ctx.Repo.Repository, isPull)
 	if ctx.Written() {
-		return nil, nil, 0, 0
+		return nil, nil, 0, 0, ""
 	}
 
 	var labelIDs []int64
@@ -1119,7 +1137,7 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 	if len(form.LabelIDs) > 0 {
 		labelIDs, err = base.StringsToInt64s(strings.Split(form.LabelIDs, ","))
 		if err != nil {
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 		labelIDMark := make(container.Set[int64])
 		labelIDMark.AddMultiple(labelIDs...)
@@ -1142,29 +1160,44 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 		milestone, err := issues_model.GetMilestoneByRepoID(ctx, ctx.Repo.Repository.ID, milestoneID)
 		if err != nil {
 			ctx.ServerError("GetMilestoneByID", err)
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 		if milestone.RepoID != repo.ID {
 			ctx.ServerError("GetMilestoneByID", err)
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 		ctx.Data["Milestone"] = milestone
 		ctx.Data["milestone_id"] = milestoneID
 	}
 
+	projectLink := ""
+	projectID := int64(0)
 	if form.ProjectID > 0 {
 		p, err := project_model.GetProjectByID(ctx, form.ProjectID)
 		if err != nil {
 			ctx.ServerError("GetProjectByID", err)
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 		if p.RepoID != ctx.Repo.Repository.ID && p.OwnerID != ctx.Repo.Repository.OwnerID {
 			ctx.NotFound("", nil)
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 
-		ctx.Data["Project"] = p
-		ctx.Data["project_id"] = form.ProjectID
+		// if projects unit of this repo is disabled in the repo, it will redirect to a 404 page
+		// if user have no access permission to the project, it will also redirect to a 404 page
+		// so we need to return empty projectLink here
+		if canWriteByDoer, err := p.CanWriteByDoer(ctx, ctx.Repo.Repository, ctx.Doer); err != nil {
+			ctx.ServerError("CanWriteByDoer", err)
+			return nil, nil, 0, 0, ""
+		} else if canWriteByDoer {
+			if !(p.IsRepositoryProject() && !ctx.Repo.CanRead(unit.TypeProjects)) {
+				ctx.Data["Project"] = p
+				ctx.Data["project_id"] = form.ProjectID
+
+				projectID = form.ProjectID
+				projectLink = p.Link(ctx)
+			}
+		}
 	}
 
 	// Check assignees
@@ -1172,7 +1205,7 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 	if len(form.AssigneeIDs) > 0 {
 		assigneeIDs, err = base.StringsToInt64s(strings.Split(form.AssigneeIDs, ","))
 		if err != nil {
-			return nil, nil, 0, 0
+			return nil, nil, 0, 0, ""
 		}
 
 		// Check if the passed assignees actually exists and is assignable
@@ -1180,18 +1213,18 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 			assignee, err := user_model.GetUserByID(ctx, aID)
 			if err != nil {
 				ctx.ServerError("GetUserByID", err)
-				return nil, nil, 0, 0
+				return nil, nil, 0, 0, ""
 			}
 
 			valid, err := access_model.CanBeAssigned(ctx, assignee, repo, isPull)
 			if err != nil {
 				ctx.ServerError("CanBeAssigned", err)
-				return nil, nil, 0, 0
+				return nil, nil, 0, 0, ""
 			}
 
 			if !valid {
 				ctx.ServerError("canBeAssigned", repo_model.ErrUserDoesNotHaveAccessToRepo{UserID: aID, RepoName: repo.Name})
-				return nil, nil, 0, 0
+				return nil, nil, 0, 0, ""
 			}
 		}
 	}
@@ -1201,7 +1234,7 @@ func ValidateRepoMetas(ctx *context.Context, form forms.CreateIssueForm, isPull 
 		assigneeIDs = append(assigneeIDs, form.AssigneeID)
 	}
 
-	return labelIDs, assigneeIDs, milestoneID, form.ProjectID
+	return labelIDs, assigneeIDs, milestoneID, projectID, projectLink
 }
 
 // NewIssuePost response for creating new issue
@@ -1219,7 +1252,7 @@ func NewIssuePost(ctx *context.Context) {
 		attachments []string
 	)
 
-	labelIDs, assigneeIDs, milestoneID, projectID := ValidateRepoMetas(ctx, *form, false)
+	labelIDs, assigneeIDs, milestoneID, projectID, projectLink := ValidateRepoMetas(ctx, *form, false)
 	if ctx.Written() {
 		return
 	}
@@ -1276,8 +1309,8 @@ func NewIssuePost(ctx *context.Context) {
 	}
 
 	log.Trace("Issue created: %d/%d", repo.ID, issue.ID)
-	if ctx.FormString("redirect_after_creation") == "project" && projectID > 0 {
-		ctx.JSONRedirect(ctx.Repo.RepoLink + "/projects/" + strconv.FormatInt(projectID, 10))
+	if ctx.FormString("redirect_after_creation") == "project" && projectLink != "" {
+		ctx.Redirect(projectLink)
 	} else {
 		ctx.JSONRedirect(issue.Link())
 	}
@@ -2639,6 +2672,7 @@ func SearchIssues(ctx *context.Context) {
 		}
 	}
 
+	// TODO:invalid projectid check?
 	var projectID *int64
 	if v := ctx.FormInt64("project"); v > 0 {
 		projectID = &v
@@ -2796,6 +2830,7 @@ func ListIssues(ctx *context.Context) {
 		}
 	}
 
+	// TODO: invalid projectid check?
 	var projectID *int64
 	if v := ctx.FormInt64("project"); v > 0 {
 		projectID = &v

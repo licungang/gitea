@@ -8,8 +8,11 @@ import (
 	"fmt"
 
 	"code.gitea.io/gitea/models/db"
+	"code.gitea.io/gitea/models/organization"
 	project_model "code.gitea.io/gitea/models/project"
+	"code.gitea.io/gitea/models/unit"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/optional"
 )
 
 // LoadProject load the project the issue was assigned to
@@ -48,32 +51,36 @@ func (issue *Issue) ProjectBoardID(ctx context.Context) int64 {
 }
 
 // LoadIssuesFromBoard load issues assigned to this board
-func LoadIssuesFromBoard(ctx context.Context, b *project_model.Board) (IssueList, error) {
+func LoadIssuesFromBoard(ctx context.Context, b *project_model.Board, doer *user_model.User, org *organization.Organization, isClosed optional.Option[bool]) (IssueList, error) {
 	issueList := make(IssueList, 0, 10)
 
-	if b.ID > 0 {
-		issues, err := Issues(ctx, &IssuesOptions{
-			ProjectBoardID: b.ID,
-			ProjectID:      b.ProjectID,
-			SortType:       "project-column-sorting",
-		})
-		if err != nil {
-			return nil, err
-		}
-		issueList = issues
+	opts := &IssuesOptions{
+		ProjectID: b.ProjectID,
+		SortType:  "project-column-sorting",
+		IsClosed:  isClosed,
 	}
 
-	if b.Default {
-		issues, err := Issues(ctx, &IssuesOptions{
-			ProjectBoardID: db.NoConditionID,
-			ProjectID:      b.ProjectID,
-			SortType:       "project-column-sorting",
-		})
-		if err != nil {
-			return nil, err
-		}
-		issueList = append(issueList, issues...)
+	if doer != nil {
+		opts.User = doer
+		opts.Org = org
+	} else {
+		// non-login user can only access public repos
+		opts.AllPublic = true
 	}
+
+	if b.ID > 0 {
+		opts.ProjectBoardID = b.ID
+	} else if b.Default {
+		opts.ProjectBoardID = db.NoConditionID
+	} else {
+		return issueList, nil
+	}
+
+	issues, err := Issues(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	issueList = append(issueList, issues...)
 
 	if err := issueList.LoadComments(ctx); err != nil {
 		return nil, err
@@ -83,16 +90,50 @@ func LoadIssuesFromBoard(ctx context.Context, b *project_model.Board) (IssueList
 }
 
 // LoadIssuesFromBoardList load issues assigned to the boards
-func LoadIssuesFromBoardList(ctx context.Context, bs project_model.BoardList) (map[int64]IssueList, error) {
+func LoadIssuesFromBoardList(ctx context.Context, bs project_model.BoardList, doer *user_model.User, org *organization.Organization, isClosed optional.Option[bool]) (map[int64]IssueList, error) {
+	if unit.TypeIssues.UnitGlobalDisabled() {
+		return nil, nil
+	}
 	issuesMap := make(map[int64]IssueList, len(bs))
-	for i := range bs {
-		il, err := LoadIssuesFromBoard(ctx, bs[i])
+	for _, b := range bs {
+		il, err := LoadIssuesFromBoard(ctx, b, doer, org, isClosed)
 		if err != nil {
 			return nil, err
 		}
-		issuesMap[bs[i].ID] = il
+		issuesMap[b.ID] = il
 	}
 	return issuesMap, nil
+}
+
+// NumIssuesInProjects returns counter of all issues assigned to a project list which doer can access
+func NumIssuesInProjects(ctx context.Context, pl project_model.ProjectList, doer *user_model.User, org *organization.Organization, isClosed optional.Option[bool]) (map[int64]int, error) {
+	numMap := make(map[int64]int, len(pl))
+	for _, p := range pl {
+		num, err := NumIssuesInProject(ctx, p, doer, org, isClosed)
+		if err != nil {
+			return nil, err
+		}
+		numMap[p.ID] = num
+	}
+
+	return numMap, nil
+}
+
+// NumIssuesInProject returns counter of all issues assigned to a project which doer can access
+func NumIssuesInProject(ctx context.Context, p *project_model.Project, doer *user_model.User, org *organization.Organization, isClosed optional.Option[bool]) (int, error) {
+	numIssuesInProject := int(0)
+	bs, err := p.GetBoards(ctx)
+	if err != nil {
+		return 0, err
+	}
+	im, err := LoadIssuesFromBoardList(ctx, bs, doer, org, isClosed)
+	if err != nil {
+		return 0, err
+	}
+	for _, il := range im {
+		numIssuesInProject += len(il)
+	}
+	return numIssuesInProject, nil
 }
 
 // ChangeProjectAssign changes the project associated with an issue
@@ -123,8 +164,11 @@ func addUpdateIssueProject(ctx context.Context, issue *Issue, doer *user_model.U
 		if err != nil {
 			return err
 		}
-		if newProject.RepoID != issue.RepoID && newProject.OwnerID != issue.Repo.OwnerID {
-			return fmt.Errorf("issue's repository is not the same as project's repository")
+
+		if canWriteByDoer, err := newProject.CanWriteByDoer(ctx, issue.Repo, doer); err != nil {
+			return err
+		} else if !canWriteByDoer {
+			return fmt.Errorf("doer have no write permission to project [id:%d]", newProjectID)
 		}
 	}
 

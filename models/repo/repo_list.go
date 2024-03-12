@@ -63,6 +63,34 @@ func RepositoryListOfMap(repoMap map[int64]*Repository) RepositoryList {
 	return RepositoryList(ValuesRepository(repoMap))
 }
 
+func (repos RepositoryList) GetOwnerIDs() []int64 {
+	ids := make(container.Set[int64], len(repos))
+	for _, repo := range repos {
+		if repo.OwnerID == 0 {
+			continue
+		}
+		ids.Add(repo.OwnerID)
+	}
+	return ids.Values()
+}
+
+func (repos RepositoryList) LoadOwners(ctx context.Context) error {
+	userIDs := repos.GetOwnerIDs()
+	users := make(map[int64]*user_model.User, len(userIDs))
+	if err := db.GetEngine(ctx).
+		Where("id > 0").
+		In("id", userIDs).
+		Find(&users); err != nil {
+		return fmt.Errorf("find users: %w", err)
+	}
+	for _, repo := range repos {
+		if repo.OwnerID > 0 && repo.Owner == nil {
+			repo.Owner = users[repo.OwnerID]
+		}
+	}
+	return nil
+}
+
 // LoadAttributes loads the attributes for the given RepositoryList
 func (repos RepositoryList) LoadAttributes(ctx context.Context) error {
 	if len(repos) == 0 {
@@ -77,15 +105,8 @@ func (repos RepositoryList) LoadAttributes(ctx context.Context) error {
 	}
 
 	// Load owners.
-	users := make(map[int64]*user_model.User, len(set))
-	if err := db.GetEngine(ctx).
-		Where("id > 0").
-		In("id", set.Values()).
-		Find(&users); err != nil {
-		return fmt.Errorf("find users: %w", err)
-	}
-	for i := range repos {
-		repos[i].Owner = users[repos[i].OwnerID]
+	if err := repos.LoadOwners(ctx); err != nil {
+		return err
 	}
 
 	// Load primary language.
@@ -193,6 +214,10 @@ const (
 	SearchOrderByForks                 SearchOrderBy = "num_forks ASC"
 	SearchOrderByForksReverse          SearchOrderBy = "num_forks DESC"
 )
+
+func PublicRepoCond(id string) builder.Cond {
+	return builder.In(id, builder.Select("id").From("repository").Where(builder.Eq{"is_private": false}))
+}
 
 // UserOwnedRepoCond returns user ownered repositories
 func UserOwnedRepoCond(userID int64) builder.Cond {
