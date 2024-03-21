@@ -357,9 +357,9 @@ func ViewProject(ctx *context.Context) {
 		boards[0].Title = ctx.Locale.TrString("repo.projects.type.uncategorized")
 	}
 
-	issuesMap, err := issues_model.LoadIssuesFromBoardList(ctx, boards)
+	issuesMap, err := issues_model.LoadIssuesFromBoardList(ctx, boards, ctx.Doer, ctx.Org.Organization)
 	if err != nil {
-		ctx.ServerError("LoadIssuesOfBoards", err)
+		ctx.ServerError("LoadIssuesFromBoardList", err)
 		return
 	}
 
