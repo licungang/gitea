@@ -16,10 +16,13 @@ import (
 var ErrAuthTokenNotExist = util.NewNotExistErrorf("auth token does not exist")
 
 type AuthToken struct { //nolint:revive
-	ID          string `xorm:"pk"`
-	TokenHash   string
-	UserID      int64              `xorm:"INDEX"`
-	ExpiresUnix timeutil.TimeStamp `xorm:"INDEX"`
+	ID            string `xorm:"pk"`
+	TokenHash     string
+	UserID        int64 `xorm:"INDEX"`
+	ExternalID    string
+	LoginSourceID int64
+	LoginType     Type
+	ExpiresUnix   timeutil.TimeStamp `xorm:"INDEX"`
 }
 
 func init() {
@@ -29,6 +32,14 @@ func init() {
 func InsertAuthToken(ctx context.Context, t *AuthToken) error {
 	_, err := db.GetEngine(ctx).Insert(t)
 	return err
+}
+
+func ExistAuthToken(ctx context.Context, id string) bool {
+	exist, err := db.Exist[AuthToken](ctx, builder.Eq{"`id`": id})
+	if err != nil {
+		return false
+	}
+	return exist
 }
 
 func GetAuthTokenByID(ctx context.Context, id string) (*AuthToken, error) {

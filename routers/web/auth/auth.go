@@ -88,10 +88,18 @@ func autoSignIn(ctx *context.Context) (bool, error) {
 
 	if err := updateSession(ctx, nil, map[string]any{
 		// Set session IDs
-		"uid":   u.ID,
-		"uname": u.Name,
+		"uid":             u.ID,
+		"uname":           u.Name,
+		"login_source_id": nt.LoginSourceID,
+		"login_type":      nt.LoginType,
 	}); err != nil {
 		return false, fmt.Errorf("unable to updateSession: %w", err)
+	}
+
+	if nt.LoginType == auth.OAuth2 {
+		if err := auth_service.UpdateExternalAuthTokenSessionIDByAuthTokenID(ctx, nt.ID, ctx.Session.ID()); err != nil {
+			log.Error("UpdateExternalAuthTokenSessionIDByAuthTokenID: %v", err)
+		}
 	}
 
 	if err := resetLocale(ctx, u); err != nil {
@@ -314,16 +322,27 @@ func handleSignIn(ctx *context.Context, u *user_model.User, remember bool) {
 }
 
 func handleSignInFull(ctx *context.Context, u *user_model.User, remember, obeyRedirect bool) string {
+	loginType, _ := ctx.Session.Get("login_type").(auth.Type)
+
 	if remember {
-		nt, token, err := auth_service.CreateAuthTokenForUserID(ctx, u.ID)
+		loginSourceID, _ := ctx.Session.Get("login_source_id").(int64)
+
+		nt, token, err := auth_service.CreateAuthTokenForUserID(ctx, u.ID, loginSourceID, loginType)
 		if err != nil {
 			ctx.ServerError("CreateAuthTokenForUserID", err)
 			return setting.AppSubURL + "/"
 		}
 
+		if loginType == auth.OAuth2 {
+			if err := auth_service.UpdateExternalAuthTokenAuthTokenID(ctx, ctx.Session.ID(), nt.ID); err != nil {
+				log.Error("UpdateExternalAuthTokenAuthTokenID: %v", err)
+			}
+		}
+
 		ctx.SetSiteCookie(setting.CookieRememberName, nt.ID+":"+token, setting.LogInRememberDays*timeutil.Day)
 	}
 
+	oldSessionID := ctx.Session.ID()
 	if err := updateSession(ctx, []string{
 		// Delete the openid, 2fa and linkaccount data
 		"openid_verified_uri",
@@ -339,6 +358,12 @@ func handleSignInFull(ctx *context.Context, u *user_model.User, remember, obeyRe
 	}); err != nil {
 		ctx.ServerError("RegenerateSession", err)
 		return setting.AppSubURL + "/"
+	}
+
+	if loginType == auth.OAuth2 {
+		if err := auth_service.UpdateExternalAuthTokenSessionID(ctx, oldSessionID, ctx.Session.ID()); err != nil {
+			log.Error("UpdateExternalAuthTokenSessionID: %v", err)
+		}
 	}
 
 	// Language setting of the user overwrites the one previously set
@@ -404,12 +429,21 @@ func HandleSignOut(ctx *context.Context) {
 
 // SignOut sign out from login status
 func SignOut(ctx *context.Context) {
+	loginType, _ := ctx.Session.Get("login_type").(auth.Type)
+
+	if loginType == auth.OAuth2 {
+		// Handle sign out in SignOutOAuth
+		redirectToSignOutOAuth(ctx)
+		return
+	}
+
 	if ctx.Doer != nil {
 		eventsource.GetManager().SendMessageBlocking(ctx.Doer.ID, &eventsource.Event{
 			Name: "logout",
 			Data: ctx.Session.ID(),
 		})
 	}
+
 	HandleSignOut(ctx)
 	ctx.JSONRedirect(setting.AppSubURL + "/")
 }
@@ -619,6 +653,9 @@ func handleUserCreated(ctx *context.Context, u *user_model.User, gothUser *goth.
 			if !errors.Is(err, util.ErrNotExist) {
 				log.Error("UpdateExternalUser failed: %v", err)
 			}
+		}
+		if err := auth_service.SetExternalAuthToken(ctx, ctx.Session.ID(), u, gothUser); err != nil {
+			log.Error("SetExternalAuthToken failed: %v", err)
 		}
 	}
 

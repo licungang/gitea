@@ -22,6 +22,7 @@ import (
 	auth_module "code.gitea.io/gitea/modules/auth"
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/container"
+	"code.gitea.io/gitea/modules/eventsource"
 	"code.gitea.io/gitea/modules/json"
 	"code.gitea.io/gitea/modules/log"
 	"code.gitea.io/gitea/modules/optional"
@@ -941,6 +942,22 @@ func SignInOAuthCallback(ctx *context.Context) {
 				return
 			}
 
+			// update from local sign in to OAuth2 sign in
+			loginType, _ := ctx.Session.Get("login_type").(auth.Type)
+			if loginType <= auth.Plain {
+				if err := updateSession(ctx, nil, map[string]any{
+					"login_source_id": authSource.ID,
+					"login_type":      authSource.Type,
+				}); err != nil {
+					ctx.ServerError("updateSession", err)
+					return
+				}
+			}
+
+			if err := auth_service.SetExternalAuthToken(ctx, ctx.Session.ID(), ctx.Doer, &gothUser); err != nil {
+				log.Error("SetExternalAuthToken failed: %v", err)
+			}
+
 			ctx.Redirect(setting.AppSubURL + "/user/settings/security")
 			return
 		} else if !setting.Service.AllowOnlyInternalRegistration && setting.OAuth2Client.EnableAutoRegistration {
@@ -1005,6 +1022,110 @@ func SignInOAuthCallback(ctx *context.Context) {
 	}
 
 	handleOAuth2SignIn(ctx, authSource, u, gothUser)
+}
+
+func redirectToSignOutOAuth(ctx *context.Context) {
+	errURL := "/user/oauth2/-/logout/error"
+
+	loginSourceID, ok := ctx.Session.Get("login_source_id").(int64)
+	if !ok {
+		log.Error("redirectToSignOutOAuth: Failed to get login_source_id from session data")
+		ctx.JSONRedirect(errURL)
+		return
+	}
+	source, err := auth.GetSourceByID(ctx, loginSourceID)
+	if err != nil {
+		log.Error("redirectToSignOutOAuth: %w", err)
+		ctx.JSONRedirect(errURL)
+		return
+	}
+
+	ctx.JSONRedirect("/user/oauth2/" + source.Name + "/logout")
+}
+
+// SignOutOAuthError shows any sign out errors occurring before SignOutOAuth
+func SignOutOAuthError(ctx *context.Context) {
+	HandleSignOut(ctx)
+	ctx.Flash.Error(ctx.Tr("Failed to handle OAuth2 or OpenID Connect sign out"), true)
+	ctx.ServerError("SignOutOAuthError", fmt.Errorf("error generating the internal OAuth2 logout URL"))
+}
+
+// SignOutOAuth handles OAuth2 and OIDC RP-initiated logout requests
+func SignOutOAuth(ctx *context.Context) {
+	provider := ctx.Params(":provider")
+	signOutErrMsg := ctx.Tr("Failed to sign out of %s, please sign out at your ID provider", provider)
+
+	authSource, err := auth.GetActiveOAuth2SourceByName(ctx, provider)
+	if err != nil {
+		HandleSignOut(ctx)
+		ctx.Flash.Error(ctx.Tr("Failed to handle OAuth2 or OpenID Connect sign out"), true)
+		ctx.ServerError(fmt.Sprintf("SignOutOAuth[%s]", provider), err)
+		return
+	}
+	oauth2Source := authSource.Cfg.(*oauth2.Source)
+	redirect, state, err := oauth2Source.EndSessionEndpoint(ctx)
+	if err != nil {
+		HandleSignOut(ctx)
+		ctx.Flash.Error(signOutErrMsg, true)
+		ctx.ServerError(fmt.Sprintf("SignOutOAuth[%s]", provider), err)
+		return
+	}
+
+	if ctx.Doer != nil {
+		eventsource.GetManager().SendMessageBlocking(ctx.Doer.ID, &eventsource.Event{
+			Name: "logout",
+			Data: ctx.Session.ID(),
+		})
+	}
+
+	if err := auth.DeleteExternalAuthTokenBySessionID(ctx, ctx.Session.ID()); err != nil {
+		log.Error("DeleteExternalAuthTokenBySessionID: %v", err)
+	}
+
+	// Sign out and redirect to landing page, if oidc end_session_endpoint was not found
+	if len(redirect) == 0 {
+		HandleSignOut(ctx)
+		ctx.Redirect(setting.AppSubURL + "/")
+		return
+	}
+
+	// The user might not return via oidc callback
+	// Sign out, but keep the session alive for tracking oidc state
+	if err := ctx.Session.Flush(); err != nil {
+		HandleSignOut(ctx)
+		ctx.Flash.Error(signOutErrMsg, true)
+		ctx.ServerError(fmt.Sprintf("SignOutOAuth[%s]", provider), err)
+		return
+	}
+	if err := ctx.Session.Set("oidc_state", state); err != nil {
+		log.Error("SignOutOAuth[%s]: %v", provider, err)
+	}
+	if err := ctx.Session.Release(); err != nil {
+		HandleSignOut(ctx)
+		ctx.Flash.Error(signOutErrMsg, true)
+		ctx.ServerError(fmt.Sprintf("SignOutOAuth[%s]", provider), err)
+		return
+	}
+	ctx.DeleteSiteCookie(setting.CookieRememberName)
+
+	// Redirect to oidc end_session_endpoint
+	ctx.Redirect(redirect)
+}
+
+// SignOutOAuthCallback handles OIDC RP-initiated logout callback requests
+func SignOutOAuthCallback(ctx *context.Context) {
+	provider := ctx.Params(":provider")
+	oidcState, _ := ctx.Session.Get("oidc_state").(string)
+	state := ctx.Req.URL.Query().Get("state")
+
+	// Cleanup and destroy the remains of the old session
+	HandleSignOut(ctx)
+	if len(oidcState) == 0 || state != oidcState {
+		ctx.Flash.Error(ctx.Tr("Invalid state parameter, please check the %s sign out URL", provider), true)
+		ctx.ServerError(fmt.Sprintf("SignOutOAuthCallback[%s]", provider), fmt.Errorf("oidc_state: \"%s\", IdP state: \"%s\"", oidcState, state))
+		return
+	}
+	ctx.Redirect(setting.AppSubURL + "/")
 }
 
 func claimValueToStringSet(claimValue any) container.Set[string] {
@@ -1117,8 +1238,10 @@ func handleOAuth2SignIn(ctx *context.Context, source *auth.Source, u *user_model
 	// we can't sign the user in just yet. Instead, redirect them to the 2FA authentication page.
 	if !needs2FA {
 		if err := updateSession(ctx, nil, map[string]any{
-			"uid":   u.ID,
-			"uname": u.Name,
+			"uid":             u.ID,
+			"uname":           u.Name,
+			"login_source_id": source.ID,
+			"login_type":      source.Type,
 		}); err != nil {
 			ctx.ServerError("updateSession", err)
 			return
@@ -1148,6 +1271,14 @@ func handleOAuth2SignIn(ctx *context.Context, source *auth.Source, u *user_model
 			if !errors.Is(err, util.ErrNotExist) {
 				log.Error("UpdateExternalUser failed: %v", err)
 			}
+		}
+
+		if err := auth_service.CleanExternalAuthTokensByUser(ctx, u.ID); err != nil {
+			log.Error("CleanUserExternalAuthTokens failed: %v", err)
+		}
+
+		if err := auth_service.SetExternalAuthToken(ctx, ctx.Session.ID(), u, &gothUser); err != nil {
+			log.Error("SetExternalAuthToken failed: %v", err)
 		}
 
 		if err := resetLocale(ctx, u); err != nil {
