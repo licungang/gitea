@@ -8,7 +8,6 @@ import (
 	"fmt"
 
 	"code.gitea.io/gitea/models/db"
-	"code.gitea.io/gitea/modules/util"
 
 	"xorm.io/builder"
 	"xorm.io/xorm"
@@ -69,20 +68,24 @@ func CountIssuesByRepo(ctx context.Context, opts *IssuesOptions) (map[int64]int6
 }
 
 // CountIssues number return of issues by given conditions.
-func CountIssues(ctx context.Context, opts *IssuesOptions) (int64, error) {
+func CountIssues(ctx context.Context, opts *IssuesOptions, otherConds ...builder.Cond) (int64, error) {
 	sess := db.GetEngine(ctx).
 		Select("COUNT(issue.id) AS count").
 		Table("issue").
 		Join("INNER", "repository", "`issue`.repo_id = `repository`.id")
 	applyConditions(sess, opts)
 
+	for _, cond := range otherConds {
+		sess.And(cond)
+	}
+
 	return sess.Count()
 }
 
 // GetIssueStats returns issue statistic information by given conditions.
-func GetIssueStats(opts *IssuesOptions) (*IssueStats, error) {
+func GetIssueStats(ctx context.Context, opts *IssuesOptions) (*IssueStats, error) {
 	if len(opts.IssueIDs) <= MaxQueryParameters {
-		return getIssueStatsChunk(opts, opts.IssueIDs)
+		return getIssueStatsChunk(ctx, opts, opts.IssueIDs)
 	}
 
 	// If too long a list of IDs is provided, we get the statistics in
@@ -95,7 +98,7 @@ func GetIssueStats(opts *IssuesOptions) (*IssueStats, error) {
 		if chunk > len(opts.IssueIDs) {
 			chunk = len(opts.IssueIDs)
 		}
-		stats, err := getIssueStatsChunk(opts, opts.IssueIDs[i:chunk])
+		stats, err := getIssueStatsChunk(ctx, opts, opts.IssueIDs[i:chunk])
 		if err != nil {
 			return nil, err
 		}
@@ -112,10 +115,10 @@ func GetIssueStats(opts *IssuesOptions) (*IssueStats, error) {
 	return accum, nil
 }
 
-func getIssueStatsChunk(opts *IssuesOptions, issueIDs []int64) (*IssueStats, error) {
+func getIssueStatsChunk(ctx context.Context, opts *IssuesOptions, issueIDs []int64) (*IssueStats, error) {
 	stats := &IssueStats{}
 
-	sess := db.GetEngine(db.DefaultContext).
+	sess := db.GetEngine(ctx).
 		Join("INNER", "repository", "`issue`.repo_id = `repository`.id")
 
 	var err error
@@ -170,11 +173,8 @@ func applyIssuesOptions(sess *xorm.Session, opts *IssuesOptions, issueIDs []int6
 		applyReviewedCondition(sess, opts.ReviewedID)
 	}
 
-	switch opts.IsPull {
-	case util.OptionalBoolTrue:
-		sess.And("issue.is_pull=?", true)
-	case util.OptionalBoolFalse:
-		sess.And("issue.is_pull=?", false)
+	if opts.IsPull.Has() {
+		sess.And("issue.is_pull=?", opts.IsPull.Value())
 	}
 
 	return sess
