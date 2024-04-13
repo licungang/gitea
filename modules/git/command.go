@@ -399,6 +399,10 @@ func IsErrorExitCode(err error, code int) bool {
 	return false
 }
 
+func NewRunStdError(err error, stderr string) RunStdError {
+	return &runStdError{err: err, stderr: stderr}
+}
+
 // RunStdString runs the command with options and returns stdout/stderr as string. and store stderr to returned error (err combined with stderr).
 func (c *Command) RunStdString(opts *RunOpts) (stdout, stderr string, runErr RunStdError) {
 	stdoutBytes, stderrBytes, err := c.RunStdBytes(opts)

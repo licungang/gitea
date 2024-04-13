@@ -23,7 +23,7 @@ type Tag struct {
 
 // Commit return the commit of the tag reference
 func (tag *Tag) Commit(gitRepo *Repository) (*Commit, error) {
-	return gitRepo.getCommit(tag.Object)
+	return gitRepo.GetCommitByObjectID(tag.Object)
 }
 
 func parsePayloadSignature(data []byte, messageStart int) (payload, msg, sign string) {

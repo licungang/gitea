@@ -7,7 +7,6 @@ package git
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -33,11 +32,6 @@ type GPGSettings struct {
 
 const prettyLogFormat = `--pretty=format:%H`
 
-// GetAllCommitsCount returns count of all commits in repository
-func (repo *Repository) GetAllCommitsCount() (int64, error) {
-	return AllCommitsCount(repo.Ctx, repo.Path, false)
-}
-
 func (repo *Repository) parsePrettyFormatLogToList(logs []byte) ([]*Commit, error) {
 	var commits []*Commit
 	if len(logs) == 0 {
@@ -61,32 +55,6 @@ func (repo *Repository) parsePrettyFormatLogToList(logs []byte) ([]*Commit, erro
 func IsRepoURLAccessible(ctx context.Context, url string) bool {
 	_, _, err := NewCommand(ctx, "ls-remote", "-q", "-h").AddDynamicArguments(url, "HEAD").RunStdString(nil)
 	return err == nil
-}
-
-// GetObjectFormatOfRepo returns the hash type of repository at a given path
-func GetObjectFormatOfRepo(ctx context.Context, repoPath string) (ObjectFormat, error) {
-	var stdout, stderr strings.Builder
-
-	err := NewCommand(ctx, "hash-object", "--stdin").Run(&RunOpts{
-		Dir:    repoPath,
-		Stdout: &stdout,
-		Stderr: &stderr,
-		Stdin:  &strings.Reader{},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if stderr.Len() > 0 {
-		return nil, errors.New(stderr.String())
-	}
-
-	h, err := NewIDFromString(strings.TrimRight(stdout.String(), "\n"))
-	if err != nil {
-		return nil, err
-	}
-
-	return h.Type(), nil
 }
 
 // InitRepository initializes a new Git repository.
@@ -342,4 +310,11 @@ func (repo *Repository) CreateBundle(ctx context.Context, commit string, out io.
 
 	_, err = io.Copy(out, fi)
 	return err
+}
+
+// GetRelativePath FIXME
+func (repo *Repository) GetRelativePath() string {
+	repoName := filepath.Base(repo.Path)
+	ownerName := filepath.Base(filepath.Dir(repo.Path))
+	return ownerName + "/" + repoName
 }

@@ -65,7 +65,7 @@ func (repo *Repository) IsCommitExist(name string) bool {
 	return err == nil
 }
 
-func (repo *Repository) getCommit(id ObjectID) (*Commit, error) {
+func (repo *Repository) GetCommitByObjectID(id ObjectID) (*Commit, error) {
 	wr, rd, cancel := repo.CatFileBatch(repo.Ctx)
 	defer cancel()
 

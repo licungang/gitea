@@ -5,12 +5,11 @@ package gitrepo
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"code.gitea.io/gitea/modules/git"
-	"code.gitea.io/gitea/modules/setting"
 )
 
 type Repository interface {
@@ -18,21 +17,27 @@ type Repository interface {
 	GetOwnerName() string
 }
 
-func repoPath(repo Repository) string {
-	return filepath.Join(setting.RepoRootPath, strings.ToLower(repo.GetOwnerName()), strings.ToLower(repo.GetName())+".git")
+var _ Repository = (*SimpleRepository)(nil)
+
+type SimpleRepository struct {
+	OwnerName string
+	Name      string
 }
 
-func wikiPath(repo Repository) string {
-	return filepath.Join(setting.RepoRootPath, strings.ToLower(repo.GetOwnerName()), strings.ToLower(repo.GetName())+".wiki.git")
+func (r *SimpleRepository) GetName() string {
+	return r.Name
 }
 
-// OpenRepository opens the repository at the given relative path with the provided context.
-func OpenRepository(ctx context.Context, repo Repository) (*git.Repository, error) {
-	return git.OpenRepository(ctx, repoPath(repo))
+func (r *SimpleRepository) GetOwnerName() string {
+	return r.OwnerName
 }
 
-func OpenWikiRepository(ctx context.Context, repo Repository) (*git.Repository, error) {
-	return git.OpenRepository(ctx, wikiPath(repo))
+func repoRelativePath(repo Repository) string {
+	return strings.ToLower(repo.GetOwnerName()) + "/" + strings.ToLower(repo.GetName()) + ".git"
+}
+
+func wikiRelativePath(repo Repository) string {
+	return strings.ToLower(repo.GetOwnerName()) + "/" + strings.ToLower(repo.GetName()) + ".wiki.git"
 }
 
 // contextKey is a value for use with context.WithValue.
@@ -44,14 +49,14 @@ type contextKey struct {
 var RepositoryContextKey = &contextKey{"repository"}
 
 // RepositoryFromContext attempts to get the repository from the context
-func repositoryFromContext(ctx context.Context, repo Repository) *git.Repository {
+func repositoryFromContext(ctx context.Context, repo Repository) GitRepository {
 	value := ctx.Value(RepositoryContextKey)
 	if value == nil {
 		return nil
 	}
 
-	if gitRepo, ok := value.(*git.Repository); ok && gitRepo != nil {
-		if gitRepo.Path == repoPath(repo) {
+	if gitRepo, ok := value.(GitRepository); ok && gitRepo != nil {
+		if gitRepo.GetRelativePath() == repoRelativePath(repo) {
 			return gitRepo
 		}
 	}
@@ -64,7 +69,7 @@ type nopCloser func()
 func (nopCloser) Close() error { return nil }
 
 // RepositoryFromContextOrOpen attempts to get the repository from the context or just opens it
-func RepositoryFromContextOrOpen(ctx context.Context, repo Repository) (*git.Repository, io.Closer, error) {
+func RepositoryFromContextOrOpen(ctx context.Context, repo Repository) (GitRepository, io.Closer, error) {
 	gitRepo := repositoryFromContext(ctx, repo)
 	if gitRepo != nil {
 		return gitRepo, nopCloser(nil), nil
@@ -75,7 +80,7 @@ func RepositoryFromContextOrOpen(ctx context.Context, repo Repository) (*git.Rep
 }
 
 // repositoryFromContextPath attempts to get the repository from the context
-func repositoryFromContextPath(ctx context.Context, path string) *git.Repository {
+func repositoryFromContextPath(ctx context.Context, path string) GitRepository {
 	value := ctx.Value(RepositoryContextKey)
 	if value == nil {
 		return nil
@@ -92,7 +97,7 @@ func repositoryFromContextPath(ctx context.Context, path string) *git.Repository
 
 // RepositoryFromContextOrOpenPath attempts to get the repository from the context or just opens it
 // Deprecated: Use RepositoryFromContextOrOpen instead
-func RepositoryFromContextOrOpenPath(ctx context.Context, path string) (*git.Repository, io.Closer, error) {
+func RepositoryFromContextOrOpenPath(ctx context.Context, path string) (GitRepository, io.Closer, error) {
 	gitRepo := repositoryFromContextPath(ctx, path)
 	if gitRepo != nil {
 		return gitRepo, nopCloser(nil), nil
@@ -100,4 +105,32 @@ func RepositoryFromContextOrOpenPath(ctx context.Context, path string) (*git.Rep
 
 	gitRepo, err := git.OpenRepository(ctx, path)
 	return gitRepo, gitRepo, err
+}
+
+func IsRepositoryExist(ctx context.Context, repo Repository) (bool, error) {
+	return curService.IsRepositoryExist(ctx, repoRelativePath(repo))
+}
+
+func RenameRepository(ctx context.Context, repo Repository, newName string) error {
+	newRepoPath := strings.ToLower(repo.GetOwnerName()) + "/" + strings.ToLower(newName) + ".git"
+	if err := curService.RenameDir(repoRelativePath(repo), newRepoPath); err != nil {
+		return fmt.Errorf("rename repository directory: %w", err)
+	}
+	return nil
+}
+
+func RenameWikiRepository(ctx context.Context, repo Repository, newName string) error {
+	newWikiRepoPath := strings.ToLower(repo.GetOwnerName()) + "/" + strings.ToLower(newName) + ".wiki.git"
+	if err := curService.RenameDir(wikiRelativePath(repo), newWikiRepoPath); err != nil {
+		return fmt.Errorf("rename repository wiki directory: %w", err)
+	}
+	return nil
+}
+
+func DeleteRepository(ctx context.Context, repo Repository) error {
+	return curService.RemoveDir(repoRelativePath(repo))
+}
+
+func ForkRepository(ctx context.Context, baseRepo, targetRepo Repository, singleBranch string) error {
+	return curService.ForkRepository(ctx, repoRelativePath(baseRepo), repoRelativePath(targetRepo), singleBranch)
 }

@@ -59,7 +59,7 @@ func SyncRepoTags(ctx context.Context, repoID int64) error {
 }
 
 // SyncReleasesWithTags synchronizes release table with repository tags
-func SyncReleasesWithTags(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository) error {
+func SyncReleasesWithTags(ctx context.Context, repo *repo_model.Repository, gitRepo gitrepo.GitRepository) error {
 	log.Debug("SyncReleasesWithTags: in Repo[%d:%s/%s]", repo.ID, repo.OwnerName, repo.Name)
 
 	// optimized procedure for pull-mirrors which saves a lot of time (in
@@ -77,7 +77,7 @@ func SyncReleasesWithTags(ctx context.Context, repo *repo_model.Repository, gitR
 	}
 	for page := 1; ; page++ {
 		opts.Page = page
-		rels, err := db.Find[repo_model.Release](gitRepo.Ctx, opts)
+		rels, err := db.Find[repo_model.Release](ctx, opts)
 		if err != nil {
 			return fmt.Errorf("unable to GetReleasesByRepoID in Repo[%d:%s/%s]: %w", repo.ID, repo.OwnerName, repo.Name, err)
 		}
@@ -120,12 +120,12 @@ func SyncReleasesWithTags(ctx context.Context, repo *repo_model.Repository, gitR
 }
 
 // PushUpdateAddTag must be called for any push actions to add tag
-func PushUpdateAddTag(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository, tagName, sha1, refname string) error {
+func PushUpdateAddTag(ctx context.Context, repo *repo_model.Repository, gitRepo gitrepo.GitRepository, tagName, sha1, refname string) error {
 	tag, err := gitRepo.GetTagWithID(sha1, tagName)
 	if err != nil {
 		return fmt.Errorf("unable to GetTag: %w", err)
 	}
-	commit, err := tag.Commit(gitRepo)
+	commit, err := gitRepo.GetCommitByObjectID(tag.Object)
 	if err != nil {
 		return fmt.Errorf("unable to get tag Commit: %w", err)
 	}
@@ -286,7 +286,7 @@ func (shortRelease) TableName() string {
 // upstream. Hence, after each sync we want the pull-mirror release set to be
 // identical to the upstream tag set. This is much more efficient for
 // repositories like https://github.com/vim/vim (with over 13000 tags).
-func pullMirrorReleaseSync(ctx context.Context, repo *repo_model.Repository, gitRepo *git.Repository) error {
+func pullMirrorReleaseSync(ctx context.Context, repo *repo_model.Repository, gitRepo gitrepo.GitRepository) error {
 	log.Trace("pullMirrorReleaseSync: rebuilding releases for pull-mirror Repo[%d:%s/%s]", repo.ID, repo.OwnerName, repo.Name)
 	tags, numTags, err := gitRepo.GetTagInfos(0, 0)
 	if err != nil {

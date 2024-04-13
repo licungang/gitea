@@ -354,7 +354,7 @@ func generateRepository(ctx context.Context, doer, owner *user_model.User, templ
 		}
 	}
 
-	if err = repo_module.CheckInitRepository(ctx, owner.Name, generateRepo.Name, generateRepo.ObjectFormatName); err != nil {
+	if err = repo_module.CheckInitRepository(ctx, generateRepo, generateRepo.ObjectFormatName); err != nil {
 		return generateRepo, err
 	}
 
@@ -362,9 +362,9 @@ func generateRepository(ctx context.Context, doer, owner *user_model.User, templ
 		return generateRepo, fmt.Errorf("checkDaemonExportOK: %w", err)
 	}
 
-	if stdout, _, err := git.NewCommand(ctx, "update-server-info").
-		SetDescription(fmt.Sprintf("GenerateRepository(git update-server-info): %s", repoPath)).
-		RunStdString(&git.RunOpts{Dir: repoPath}); err != nil {
+	cmd := git.NewCommand(ctx, "update-server-info").
+		SetDescription(fmt.Sprintf("GenerateRepository(git update-server-info): %s", repoPath))
+	if stdout, _, err := gitrepo.RunGitCmdStdString(generateRepo, cmd, &gitrepo.RunOpts{}); err != nil {
 		log.Error("GenerateRepository(git update-server-info) in %v: Stdout: %s\nError: %v", generateRepo, stdout, err)
 		return generateRepo, fmt.Errorf("error in GenerateRepository(git update-server-info): %w", err)
 	}

@@ -1,9 +1,10 @@
 // Copyright 2020 The Gitea Authors. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-package repository
+package gitrepo
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -105,8 +106,8 @@ done
 	return hookNames, hookTpls, giteaHookTpls
 }
 
-// CreateDelegateHooks creates all the hooks scripts for the repo
-func CreateDelegateHooks(repoPath string) (err error) {
+// createDelegateHooks creates all the hooks scripts for the repo
+func createDelegateHooks(ctx context.Context, repoPath string) (err error) {
 	hookNames, hookTpls, giteaHookTpls := getHookTemplates()
 	hookDir := filepath.Join(repoPath, "hooks")
 
@@ -169,11 +170,12 @@ func ensureExecutable(filename string) error {
 	return os.Chmod(filename, mode)
 }
 
-// CheckDelegateHooks checks the hooks scripts for the repo
-func CheckDelegateHooks(repoPath string) ([]string, error) {
+// checkDelegateHooks checks the hooks scripts for the repo
+func checkDelegateHooks(ctx context.Context, repoPath string) ([]string, error) {
 	hookNames, hookTpls, giteaHookTpls := getHookTemplates()
 
 	hookDir := filepath.Join(repoPath, "hooks")
+
 	results := make([]string, 0, 10)
 
 	for i, hookName := range hookNames {
@@ -230,4 +232,11 @@ func CheckDelegateHooks(repoPath string) ([]string, error) {
 		}
 	}
 	return results, nil
+}
+
+func CreateDelegateHooks(ctx context.Context, repo Repository, isWiki bool) (err error) {
+	if !isWiki {
+		return curService.CreateDelegateHooks(ctx, repoRelativePath(repo))
+	}
+	return curService.CreateDelegateHooks(ctx, wikiRelativePath(repo))
 }

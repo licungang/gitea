@@ -64,7 +64,7 @@ func (c *Commit) Parent(n int) (*Commit, error) {
 	if err != nil {
 		return nil, err
 	}
-	parent, err := c.repo.getCommit(id)
+	parent, err := c.repo.GetCommitByObjectID(id)
 	if err != nil {
 		return nil, err
 	}
@@ -140,25 +140,6 @@ func CommitChangesWithArgs(repoPath string, args TrustedCmdArgs, opts CommitChan
 		return nil
 	}
 	return err
-}
-
-// AllCommitsCount returns count of all commits in repository
-func AllCommitsCount(ctx context.Context, repoPath string, hidePRRefs bool, files ...string) (int64, error) {
-	cmd := NewCommand(ctx, "rev-list")
-	if hidePRRefs {
-		cmd.AddArguments("--exclude=" + PullPrefix + "*")
-	}
-	cmd.AddArguments("--all", "--count")
-	if len(files) > 0 {
-		cmd.AddDashesAndList(files...)
-	}
-
-	stdout, _, err := cmd.RunStdString(&RunOpts{Dir: repoPath})
-	if err != nil {
-		return 0, err
-	}
-
-	return strconv.ParseInt(strings.TrimSpace(stdout), 10, 64)
 }
 
 // CommitsCountOptions the options when counting commits
