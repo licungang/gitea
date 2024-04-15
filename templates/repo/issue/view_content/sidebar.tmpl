@@ -184,7 +184,7 @@
 							{{end}}
 						{{end}}
 						<a class="item muted sidebar-item-link{{if $checked}} checked{{end}}" data-id="{{.ID}}" data-href="{{.Link ctx}}">
-							<span class="octicon-check {{if not $checked}}tw-invisible{{end}}">{{svg "octicon-check"}}</span>
+							<span class="octicon-check{{if not $checked}} tw-invisible{{end}}">{{svg "octicon-check"}}</span>
 							<span class="text">
 							{{svg .IconName 18 "tw-mr-2"}}{{.Title}}
 							</span>
