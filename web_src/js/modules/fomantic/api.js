@@ -1,40 +1,69 @@
 import $ from 'jquery';
+import {GET} from '../fetch.js';
+import {isObject} from '../../utils.js';
 
-export function initFomanticApiPatch() {
-  //
-  // Fomantic API module has some very buggy behaviors:
-  //
-  // If encodeParameters=true, it calls `urlEncodedValue` to encode the parameter.
-  // However, `urlEncodedValue` just tries to "guess" whether the parameter is already encoded, by decoding the parameter and encoding it again.
-  //
-  // There are 2 problems:
-  // 1. It may guess wrong, and skip encoding a parameter which looks like encoded.
-  // 2. If the parameter can't be decoded, `decodeURIComponent` will throw an error, and the whole request will fail.
-  //
-  // This patch only fixes the second error behavior at the moment.
-  //
-  const patchKey = '_giteaFomanticApiPatch';
-  const oldApi = $.api;
-  $.api = $.fn.api = function(...args) {
-    const apiCall = oldApi.bind(this);
-    const ret = oldApi.apply(this, args);
+// action: "search"
+// cache: true
+// debug: false
+// on: false
+// onAbort: function onAbort(response)
+// onError: function error()
+// onFailure: function onFailure()
+// onResponse: function onResponse(response)
+// onSuccess: function onSuccess(response)
+// url: "/user/search?active=1&q={query}"
+// urlData: Object { query: "si" }
 
-    if (typeof args[0] !== 'string') {
-      const internalGet = apiCall('internal', 'get');
-      if (!internalGet.urlEncodedValue[patchKey]) {
-        const oldUrlEncodedValue = internalGet.urlEncodedValue;
-        internalGet.urlEncodedValue = function (value) {
-          try {
-            return oldUrlEncodedValue(value);
-          } catch {
-            // if Fomantic API module's `urlEncodedValue` throws an error, we encode it by ourselves.
-            return encodeURIComponent(value);
-          }
-        };
-        internalGet.urlEncodedValue[patchKey] = true;
-      }
+export function initFomanticApi() {
+  // stand-in for removed api module
+  // https://github.com/fomantic/Fomantic-UI/blob/2.8.7/src/definitions/modules/dropdown.js
+  // https://github.com/fomantic/Fomantic-UI/blob/2.8.7/src/definitions/behaviors/api.js
+  $.fn.api = function (arg0) {
+    console.info(arg0);
+
+    if (arg0 === 'is loading') {
+      return this._loading;
     }
-    return ret;
+
+    if (arg0 === 'abort') {
+      this._ac?.abort();
+      return;
+    }
+
+    if (isObject(arg0)) {
+      let {url, urlData, onSuccess, onError, onAbort} = arg0;
+      if (url.includes('{query}') && urlData?.query) {
+        url = url.replace('{query}', urlData.query);
+      }
+      this._data = {url, onSuccess, onError, onAbort};
+    } else if (arg0 === 'query') {
+      (async () => {
+        const {url, onSuccess, onError, onAbort} = this._data;
+
+        try {
+          this._loading = true;
+          this._ac = new AbortController();
+          const res = await GET(url, {signal: this.ac.signal});
+          if (!res.ok) {
+            onError?.();
+          }
+
+          if (res?.headers?.['content-type']?.startsWith('application/json')) {
+            onSuccess?.(await res.json());
+          } else {
+            onSuccess?.(await res.text());
+          }
+        } catch (err) {
+          this._loading = false;
+          if (err.name === 'AbortError') {
+            onAbort?.();
+          } else {
+            onError?.();
+          }
+        }
+      })();
+    }
+
+    return this;
   };
-  $.api.settings = oldApi.settings;
 }
