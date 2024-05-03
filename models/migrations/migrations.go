@@ -572,6 +572,21 @@ var migrations = []Migration{
 	NewMigration("Ensure every project has exactly one default column - No Op", noopMigration),
 	// v293 -> v294
 	NewMigration("Ensure every project has exactly one default column", v1_22.CheckProjectColumnsConsistency),
+
+	// Gitea 1.22.0-rc0 ends at 294
+
+	// v294 -> v295
+	NewMigration("Add unique index for project issue table", v1_22.AddUniqueIndexForProjectIssue),
+	// v295 -> v296
+	NewMigration("Add commit status summary table", v1_22.AddCommitStatusSummary),
+	// v296 -> v297
+	NewMigration("Add missing field of commit status summary table", v1_22.AddCommitStatusSummary2),
+	// v297 -> v298
+	NewMigration("Add everyone_access_mode for repo_unit", v1_22.AddRepoUnitEveryoneAccessMode),
+	// v298 -> v299
+	NewMigration("Drop wrongly created table o_auth2_application", v1_22.DropWronglyCreatedTable),
+
+	// Gitea 1.22.0-rc1 ends at 299
 }
 
 // GetCurrentDBVersion returns the current db version

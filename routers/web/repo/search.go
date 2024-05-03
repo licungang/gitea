@@ -28,6 +28,7 @@ func Search(ctx *context.Context) {
 	ctx.Data["Language"] = language
 	ctx.Data["IsFuzzy"] = isFuzzy
 	ctx.Data["PageIsViewCode"] = true
+	ctx.Data["IsRepoIndexerEnabled"] = setting.Indexer.RepoIndexerEnabled
 
 	if keyword == "" {
 		ctx.HTML(http.StatusOK, tplSearch)
@@ -81,12 +82,11 @@ func Search(ctx *context.Context) {
 				// UpdatedUnix: not supported yet
 				// Language:    not supported yet
 				// Color:       not supported yet
-				Lines: code_indexer.HighlightSearchResultCode(r.Filename, r.LineNumbers, strings.Join(r.LineCodes, "\n")),
+				Lines: code_indexer.HighlightSearchResultCode(r.Filename, "", r.LineNumbers, strings.Join(r.LineCodes, "\n")),
 			})
 		}
 	}
 
-	ctx.Data["CodeIndexerEnabled"] = setting.Indexer.RepoIndexerEnabled
 	ctx.Data["Repo"] = ctx.Repo.Repository
 	ctx.Data["SearchResults"] = searchResults
 	ctx.Data["SearchResultLanguages"] = searchResultLanguages

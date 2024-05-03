@@ -26,14 +26,14 @@ type Commit struct {
 	Author        *Signature
 	Committer     *Signature
 	CommitMessage string
-	Signature     *CommitGPGSignature
+	Signature     *CommitSignature
 
 	Parents        []ObjectID // ID strings
 	submoduleCache *ObjectCache
 }
 
-// CommitGPGSignature represents a git commit signature part.
-type CommitGPGSignature struct {
+// CommitSignature represents a git commit signature part.
+type CommitSignature struct {
 	Signature string
 	Payload   string // TODO check if can be reconstruct from the rest of commit information to not have duplicate data
 }
@@ -468,7 +468,7 @@ func parseCommitFileStatus(fileStatus *CommitFileStatus, stdout io.Reader) {
 		_, _ = rd.Discard(1)
 	}
 	for {
-		modifier, err := rd.ReadSlice('\x00')
+		modifier, err := rd.ReadString('\x00')
 		if err != nil {
 			if err != io.EOF {
 				log.Error("Unexpected error whilst reading from git log --name-status. Error: %v", err)
