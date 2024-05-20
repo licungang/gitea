@@ -5,11 +5,11 @@ package issues
 
 import (
 	"context"
-	"fmt"
 
 	"code.gitea.io/gitea/models/db"
 	project_model "code.gitea.io/gitea/models/project"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/util"
 )
 
 // LoadProject load the project the issue was assigned to
@@ -83,39 +83,33 @@ func LoadIssuesFromBoardList(ctx context.Context, bs project_model.BoardList) (m
 	return issuesMap, nil
 }
 
-// ChangeProjectAssign changes the project associated with an issue
-func ChangeProjectAssign(ctx context.Context, issue *Issue, doer *user_model.User, newProjectID int64, action string) error {
-	ctx, committer, err := db.TxContext(ctx)
-	if err != nil {
-		return err
-	}
-	defer committer.Close()
+// IssueAssignOrRemoveProject changes the project associated with an issue
+// If newProjectID is 0, the issue is removed from the project
+func IssueAssignOrRemoveProject(ctx context.Context, issue *Issue, doer *user_model.User, newProjectID, newColumnID int64, action string) error {
+	return db.WithTx(ctx, func(ctx context.Context) error {
+		oldProjectID := issue.projectID(ctx)
 
-	if err := addUpdateIssueProject(ctx, issue, doer, newProjectID, action); err != nil {
-		return err
-	}
-
-	return committer.Commit()
-}
-
-func addUpdateIssueProject(ctx context.Context, issue *Issue, doer *user_model.User, newProjectID int64, action string) error {
-	var oldProjectIDs []int64
-	var err error
-
-	if err = issue.LoadRepo(ctx); err != nil {
-		return err
-	}
-
-	// Only check if we add a new project and not remove it.
-	if newProjectID > 0 {
-		newProject, err := project_model.GetProjectByID(ctx, newProjectID)
-		if err != nil {
+		if err := issue.LoadRepo(ctx); err != nil {
 			return err
 		}
-		if newProject.RepoID != issue.RepoID && newProject.OwnerID != issue.Repo.OwnerID {
-			return fmt.Errorf("issue's repository is not the same as project's repository")
+
+		// Only check if we add a new project and not remove it.
+		if newProjectID > 0 {
+			newProject, err := project_model.GetProjectByID(ctx, newProjectID)
+			if err != nil {
+				return err
+			}
+			if !newProject.CanBeAccessedByOwnerRepo(issue.Repo.OwnerID, issue.Repo) {
+				return util.NewPermissionDeniedErrorf("issue %d can't be accessed by project %d", issue.ID, newProject.ID)
+			}
+			if newColumnID == 0 {
+				newDefaultColumn, err := newProject.GetDefaultBoard(ctx)
+				if err != nil {
+					return err
+				}
+				newColumnID = newDefaultColumn.ID
+			}
 		}
-	}
 
 	if action == "null" {
 		if newProjectID == 0 {
@@ -161,7 +155,6 @@ func addUpdateIssueProject(ctx context.Context, issue *Issue, doer *user_model.U
 		}); err != nil {
 			return err
 		}
-	}
 
 	return err
 }

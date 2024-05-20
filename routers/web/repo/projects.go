@@ -21,6 +21,7 @@ import (
 	"code.gitea.io/gitea/modules/markup/markdown"
 	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/setting"
+	"code.gitea.io/gitea/modules/util"
 	"code.gitea.io/gitea/modules/web"
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/forms"
@@ -383,12 +384,19 @@ func UpdateIssueProject(ctx *context.Context) {
 		ctx.ServerError("LoadProjects", err)
 		return
 	}
+	if _, err := issues.LoadRepositories(ctx); err != nil {
+		ctx.ServerError("LoadProjects", err)
+		return
+	}
 
 	projectID := ctx.FormInt64("id")
 	action := ctx.FormString("action")
 	for _, issue := range issues {
-		if err := issues_model.ChangeProjectAssign(ctx, issue, ctx.Doer, projectID, action); err != nil {
-			ctx.ServerError("ChangeProjectAssign", err)
+		if err := issues_model.IssueAssignOrRemoveProject(ctx, issue, ctx.Doer, projectID, 0, action); err != nil {
+			if errors.Is(err, util.ErrPermissionDenied) {
+				continue
+			}
+			ctx.ServerError("IssueAssignOrRemoveProject", err)
 			return
 		}
 	}

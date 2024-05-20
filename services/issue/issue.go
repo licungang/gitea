@@ -42,7 +42,7 @@ func NewIssue(ctx context.Context, repo *repo_model.Repository, issue *issues_mo
 			}
 		}
 		if projectID > 0 {
-			if err := issues_model.ChangeProjectAssign(ctx, issue, issue.Poster, projectID, "attach"); err != nil {
+			if err := issues_model.IssueAssignOrRemoveProject(ctx, issue, issue.Poster, projectID, 0, "attach"); err != nil {
 				return err
 			}
 		}
