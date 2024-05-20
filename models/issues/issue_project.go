@@ -87,8 +87,8 @@ func LoadIssuesFromBoardList(ctx context.Context, bs project_model.BoardList) (m
 // If newProjectID is 0, the issue is removed from the project
 func IssueAssignOrRemoveProject(ctx context.Context, issue *Issue, doer *user_model.User, newProjectID, newColumnID int64, action string) error {
 	return db.WithTx(ctx, func(ctx context.Context) error {
-		oldProjectID := issue.projectID(ctx)
-
+		oldProjectIDs := issue.projectIDs(ctx)
+		var err error
 		if err := issue.LoadRepo(ctx); err != nil {
 			return err
 		}
@@ -111,50 +111,51 @@ func IssueAssignOrRemoveProject(ctx context.Context, issue *Issue, doer *user_mo
 			}
 		}
 
-	if action == "null" {
-		if newProjectID == 0 {
-			action = "clear"
-		} else {
-			action = "attach"
-			count, err := db.GetEngine(ctx).Table("project_issue").Where("issue_id=? AND project_id=?", issue.ID, newProjectID).Count()
-			if err != nil {
+		if action == "null" {
+			if newProjectID == 0 {
+				action = "clear"
+			} else {
+				action = "attach"
+				count, err := db.GetEngine(ctx).Table("project_issue").Where("issue_id=? AND project_id=?", issue.ID, newProjectID).Count()
+				if err != nil {
+					return err
+				}
+				if count > 0 {
+					action = "detach"
+				}
+			}
+		}
+
+		if action == "attach" {
+			err = db.Insert(ctx, &project_model.ProjectIssue{
+				IssueID:   issue.ID,
+				ProjectID: newProjectID,
+			})
+			oldProjectIDs = append(oldProjectIDs, 0)
+		} else if action == "detach" {
+			_, err = db.GetEngine(ctx).Where("issue_id=? AND project_id=?", issue.ID, newProjectID).Delete(&project_model.ProjectIssue{})
+			oldProjectIDs = append(oldProjectIDs, newProjectID)
+			newProjectID = 0
+		} else if action == "clear" {
+			if err = db.GetEngine(ctx).Table("project_issue").Select("project_id").Where("issue_id=?", issue.ID).Find(&oldProjectIDs); err != nil {
 				return err
 			}
-			if count > 0 {
-				action = "detach"
+			_, err = db.GetEngine(ctx).Where("issue_id=?", issue.ID).Delete(&project_model.ProjectIssue{})
+			newProjectID = 0
+		}
+
+		for i := range oldProjectIDs {
+			if _, err := CreateComment(ctx, &CreateCommentOptions{
+				Type:         CommentTypeProject,
+				Doer:         doer,
+				Repo:         issue.Repo,
+				Issue:        issue,
+				OldProjectID: oldProjectIDs[i],
+				ProjectID:    newProjectID,
+			}); err != nil {
+				return err
 			}
 		}
-	}
-
-	if action == "attach" {
-		err = db.Insert(ctx, &project_model.ProjectIssue{
-			IssueID:   issue.ID,
-			ProjectID: newProjectID,
-		})
-		oldProjectIDs = append(oldProjectIDs, 0)
-	} else if action == "detach" {
-		_, err = db.GetEngine(ctx).Where("issue_id=? AND project_id=?", issue.ID, newProjectID).Delete(&project_model.ProjectIssue{})
-		oldProjectIDs = append(oldProjectIDs, newProjectID)
-		newProjectID = 0
-	} else if action == "clear" {
-		if err = db.GetEngine(ctx).Table("project_issue").Select("project_id").Where("issue_id=?", issue.ID).Find(&oldProjectIDs); err != nil {
-			return err
-		}
-		_, err = db.GetEngine(ctx).Where("issue_id=?", issue.ID).Delete(&project_model.ProjectIssue{})
-		newProjectID = 0
-	}
-
-	for i := range oldProjectIDs {
-		if _, err := CreateComment(ctx, &CreateCommentOptions{
-			Type:         CommentTypeProject,
-			Doer:         doer,
-			Repo:         issue.Repo,
-			Issue:        issue,
-			OldProjectID: oldProjectIDs[i],
-			ProjectID:    newProjectID,
-		}); err != nil {
-			return err
-		}
-
-	return err
+		return err
+	})
 }
