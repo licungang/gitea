@@ -229,8 +229,8 @@ func (b *Indexer) Search(ctx context.Context, options *internal.SearchOptions) (
 			queries = append(queries, inner_bleve.BoolFieldQuery(true, "no_project"))
 		}
 	}
-	if options.ProjectBoardID.Has() {
-		queries = append(queries, inner_bleve.NumericEqualityQuery(options.ProjectBoardID.Value(), "project_board_id"))
+	if options.ProjectColumnID.Has() {
+		queries = append(queries, inner_bleve.NumericEqualityQuery(options.ProjectColumnID.Value(), "project_board_id"))
 	}
 
 	if options.PosterID.Has() {

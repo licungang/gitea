@@ -179,8 +179,8 @@ func (b *Indexer) Search(ctx context.Context, options *internal.SearchOptions) (
 			query.And(inner_meilisearch.NewFilterEq("no_label", true))
 		}
 	}
-	if options.ProjectBoardID.Has() {
-		query.And(inner_meilisearch.NewFilterEq("project_board_id", options.ProjectBoardID.Value()))
+	if options.ProjectColumnID.Has() {
+		query.And(inner_meilisearch.NewFilterEq("project_board_id", options.ProjectColumnID.Value()))
 	}
 
 	if options.PosterID.Has() {
