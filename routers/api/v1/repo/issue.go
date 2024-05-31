@@ -14,6 +14,7 @@ import (
 
 	"code.gitea.io/gitea/models/db"
 	issues_model "code.gitea.io/gitea/models/issues"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	"code.gitea.io/gitea/models/organization"
 	access_model "code.gitea.io/gitea/models/perm/access"
 	repo_model "code.gitea.io/gitea/models/repo"
@@ -29,6 +30,7 @@ import (
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/convert"
 	issue_service "code.gitea.io/gitea/services/issue"
+	milestone_service "code.gitea.io/gitea/services/milestone"
 )
 
 // SearchIssues searches for issues across the repositories that the user has access to
@@ -235,7 +237,7 @@ func SearchIssues(ctx *context.APIContext) {
 		if len(milestones) > 0 {
 			includedMilestoneNames = strings.Split(milestones, ",")
 		}
-		includedMilestones, err = issues_model.GetMilestoneIDsByNames(ctx, includedMilestoneNames)
+		includedMilestones, err = milestone_model.GetMilestoneIDsByNames(ctx, includedMilestoneNames)
 		if err != nil {
 			ctx.Error(http.StatusInternalServerError, "GetMilestoneIDsByNames", err)
 			return
@@ -424,12 +426,12 @@ func ListIssues(ctx *context.APIContext) {
 		for i := range part {
 			// uses names and fall back to ids
 			// non existent milestones are discarded
-			mile, err := issues_model.GetMilestoneByRepoIDANDName(ctx, ctx.Repo.Repository.ID, part[i])
+			mile, err := milestone_model.GetMilestoneByRepoIDANDName(ctx, ctx.Repo.Repository.ID, part[i])
 			if err == nil {
 				mileIDs = append(mileIDs, mile.ID)
 				continue
 			}
-			if !issues_model.IsErrMilestoneNotExist(err) {
+			if !milestone_model.IsErrMilestoneNotExist(err) {
 				ctx.Error(http.StatusInternalServerError, "GetMilestoneByRepoIDANDName", err)
 				return
 			}
@@ -437,12 +439,12 @@ func ListIssues(ctx *context.APIContext) {
 			if err != nil {
 				continue
 			}
-			mile, err = issues_model.GetMilestoneByRepoID(ctx, ctx.Repo.Repository.ID, id)
+			mile, err = milestone_model.GetMilestoneByRepoID(ctx, ctx.Repo.Repository.ID, id)
 			if err == nil {
 				mileIDs = append(mileIDs, mile.ID)
 				continue
 			}
-			if issues_model.IsErrMilestoneNotExist(err) {
+			if milestone_model.IsErrMilestoneNotExist(err) {
 				continue
 			}
 			ctx.Error(http.StatusInternalServerError, "GetMilestoneByRepoID", err)
@@ -875,7 +877,7 @@ func EditIssue(ctx *context.APIContext) {
 		issue.MilestoneID != *form.Milestone {
 		oldMilestoneID := issue.MilestoneID
 		issue.MilestoneID = *form.Milestone
-		if err = issue_service.ChangeMilestoneAssign(ctx, issue, ctx.Doer, oldMilestoneID); err != nil {
+		if err = milestone_service.ChangeMilestoneAssign(ctx, issue, ctx.Doer, oldMilestoneID); err != nil {
 			ctx.Error(http.StatusInternalServerError, "ChangeMilestoneAssign", err)
 			return
 		}

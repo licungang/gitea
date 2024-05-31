@@ -1,7 +1,7 @@
 // Copyright 2023 The Gitea Authors. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-package issues
+package milestone
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"xorm.io/builder"
 )
 
-// MilestoneList is a list of milestones offering additional functionality
-type MilestoneList []*Milestone
+// List is a list of milestones offering additional functionality
+type List []*Milestone
 
-func (milestones MilestoneList) getMilestoneIDs() []int64 {
+func (milestones List) getMilestoneIDs() []int64 {
 	ids := make([]int64, 0, len(milestones))
 	for _, ms := range milestones {
 		ids = append(ids, ms.ID)
@@ -27,16 +27,22 @@ func (milestones MilestoneList) getMilestoneIDs() []int64 {
 // FindMilestoneOptions contain options to get milestones
 type FindMilestoneOptions struct {
 	db.ListOptions
+	OrgID    int64
 	RepoID   int64
 	IsClosed optional.Option[bool]
 	Name     string
 	SortType string
 	RepoCond builder.Cond
 	RepoIDs  []int64
+	OrgIDs   []int64
+	Type     Type
 }
 
 func (opts FindMilestoneOptions) ToConds() builder.Cond {
 	cond := builder.NewCond()
+	if opts.OrgID != 0 {
+		cond = cond.And(builder.Eq{"org_id": opts.OrgID})
+	}
 	if opts.RepoID != 0 {
 		cond = cond.And(builder.Eq{"repo_id": opts.RepoID})
 	}
@@ -44,7 +50,11 @@ func (opts FindMilestoneOptions) ToConds() builder.Cond {
 		cond = cond.And(builder.Eq{"is_closed": opts.IsClosed.Value()})
 	}
 	if opts.RepoCond != nil && opts.RepoCond.IsValid() {
-		cond = cond.And(builder.In("repo_id", builder.Select("id").From("repository").Where(opts.RepoCond)))
+		if len(opts.OrgIDs) > 0 {
+			cond = cond.And(builder.Or(builder.In("org_id", opts.OrgIDs), builder.In("repo_id", builder.Select("id").From("repository").Where(opts.RepoCond))))
+		} else {
+			cond = cond.And(builder.In("repo_id", builder.Select("id").From("repository").Where(opts.RepoCond)))
+		}
 	}
 	if len(opts.RepoIDs) > 0 {
 		cond = cond.And(builder.In("repo_id", opts.RepoIDs))
@@ -88,7 +98,7 @@ func GetMilestoneIDsByNames(ctx context.Context, names []string) ([]int64, error
 }
 
 // LoadTotalTrackedTimes loads for every milestone in the list the TotalTrackedTime by a batch request
-func (milestones MilestoneList) LoadTotalTrackedTimes(ctx context.Context) error {
+func (milestones List) LoadTotalTrackedTimes(ctx context.Context) error {
 	type totalTimesByMilestone struct {
 		MilestoneID int64
 		Time        int64

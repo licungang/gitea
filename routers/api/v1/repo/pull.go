@@ -16,6 +16,7 @@ import (
 	activities_model "code.gitea.io/gitea/models/activities"
 	git_model "code.gitea.io/gitea/models/git"
 	issues_model "code.gitea.io/gitea/models/issues"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	access_model "code.gitea.io/gitea/models/perm/access"
 	pull_model "code.gitea.io/gitea/models/pull"
 	repo_model "code.gitea.io/gitea/models/repo"
@@ -37,6 +38,7 @@ import (
 	"code.gitea.io/gitea/services/forms"
 	"code.gitea.io/gitea/services/gitdiff"
 	issue_service "code.gitea.io/gitea/services/issue"
+	milestone_service "code.gitea.io/gitea/services/milestone"
 	notify_service "code.gitea.io/gitea/services/notify"
 	pull_service "code.gitea.io/gitea/services/pull"
 	repo_service "code.gitea.io/gitea/services/repository"
@@ -446,9 +448,9 @@ func CreatePullRequest(ctx *context.APIContext) {
 	}
 
 	if form.Milestone > 0 {
-		milestone, err := issues_model.GetMilestoneByRepoID(ctx, ctx.Repo.Repository.ID, form.Milestone)
+		milestone, err := milestone_model.GetMilestoneByRepoID(ctx, ctx.Repo.Repository.ID, form.Milestone)
 		if err != nil {
-			if issues_model.IsErrMilestoneNotExist(err) {
+			if milestone_model.IsErrMilestoneNotExist(err) {
 				ctx.NotFound()
 			} else {
 				ctx.Error(http.StatusInternalServerError, "GetMilestoneByRepoID", err)
@@ -664,7 +666,7 @@ func EditPullRequest(ctx *context.APIContext) {
 		issue.MilestoneID != form.Milestone {
 		oldMilestoneID := issue.MilestoneID
 		issue.MilestoneID = form.Milestone
-		if err = issue_service.ChangeMilestoneAssign(ctx, issue, ctx.Doer, oldMilestoneID); err != nil {
+		if err = milestone_service.ChangeMilestoneAssign(ctx, issue, ctx.Doer, oldMilestoneID); err != nil {
 			ctx.Error(http.StatusInternalServerError, "ChangeMilestoneAssign", err)
 			return
 		}

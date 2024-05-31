@@ -13,6 +13,7 @@ import (
 
 	"code.gitea.io/gitea/models/db"
 	issues_model "code.gitea.io/gitea/models/issues"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/models/unittest"
 	user_model "code.gitea.io/gitea/models/user"
@@ -357,8 +358,8 @@ func TestCorrectIssueStats(t *testing.T) {
 
 func TestMilestoneList_LoadTotalTrackedTimes(t *testing.T) {
 	assert.NoError(t, unittest.PrepareTestDatabase())
-	miles := issues_model.MilestoneList{
-		unittest.AssertExistsAndLoadBean(t, &issues_model.Milestone{ID: 1}),
+	miles := milestone_model.List{
+		unittest.AssertExistsAndLoadBean(t, &milestone_model.Milestone{ID: 1}),
 	}
 
 	assert.NoError(t, miles.LoadTotalTrackedTimes(db.DefaultContext))
@@ -368,7 +369,7 @@ func TestMilestoneList_LoadTotalTrackedTimes(t *testing.T) {
 
 func TestLoadTotalTrackedTime(t *testing.T) {
 	assert.NoError(t, unittest.PrepareTestDatabase())
-	milestone := unittest.AssertExistsAndLoadBean(t, &issues_model.Milestone{ID: 1})
+	milestone := unittest.AssertExistsAndLoadBean(t, &milestone_model.Milestone{ID: 1})
 
 	assert.NoError(t, milestone.LoadTotalTrackedTime(db.DefaultContext))
 
@@ -432,7 +433,7 @@ func assertCreateIssues(t *testing.T, isPull bool) {
 	repo := unittest.AssertExistsAndLoadBean(t, &repo_model.Repository{Name: reponame})
 	owner := unittest.AssertExistsAndLoadBean(t, &user_model.User{ID: repo.OwnerID})
 	label := unittest.AssertExistsAndLoadBean(t, &issues_model.Label{ID: 1})
-	milestone := unittest.AssertExistsAndLoadBean(t, &issues_model.Milestone{ID: 1})
+	milestone := unittest.AssertExistsAndLoadBean(t, &milestone_model.Milestone{ID: 1})
 	assert.EqualValues(t, milestone.ID, 1)
 	reaction := &issues_model.Reaction{
 		Type:   "heart",

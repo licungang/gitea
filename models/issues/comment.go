@@ -14,6 +14,7 @@ import (
 
 	"code.gitea.io/gitea/models/db"
 	git_model "code.gitea.io/gitea/models/git"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	"code.gitea.io/gitea/models/organization"
 	project_model "code.gitea.io/gitea/models/project"
 	repo_model "code.gitea.io/gitea/models/repo"
@@ -242,8 +243,8 @@ type Comment struct {
 	Project          *project_model.Project `xorm:"-"`
 	OldMilestoneID   int64
 	MilestoneID      int64
-	OldMilestone     *Milestone `xorm:"-"`
-	Milestone        *Milestone `xorm:"-"`
+	OldMilestone     *milestone_model.Milestone `xorm:"-"`
+	Milestone        *milestone_model.Milestone `xorm:"-"`
 	TimeID           int64
 	Time             *TrackedTime `xorm:"-"`
 	AssigneeID       int64
@@ -545,7 +546,7 @@ func (c *Comment) LoadProject(ctx context.Context) error {
 // LoadMilestone if comment.Type is CommentTypeMilestone, then load milestone
 func (c *Comment) LoadMilestone(ctx context.Context) error {
 	if c.OldMilestoneID > 0 {
-		var oldMilestone Milestone
+		var oldMilestone milestone_model.Milestone
 		has, err := db.GetEngine(ctx).ID(c.OldMilestoneID).Get(&oldMilestone)
 		if err != nil {
 			return err
@@ -555,7 +556,7 @@ func (c *Comment) LoadMilestone(ctx context.Context) error {
 	}
 
 	if c.MilestoneID > 0 {
-		var milestone Milestone
+		var milestone milestone_model.Milestone
 		has, err := db.GetEngine(ctx).ID(c.MilestoneID).Get(&milestone)
 		if err != nil {
 			return err

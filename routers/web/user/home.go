@@ -18,6 +18,7 @@ import (
 	asymkey_model "code.gitea.io/gitea/models/asymkey"
 	"code.gitea.io/gitea/models/db"
 	issues_model "code.gitea.io/gitea/models/issues"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	"code.gitea.io/gitea/models/organization"
 	repo_model "code.gitea.io/gitea/models/repo"
 	"code.gitea.io/gitea/models/unit"
@@ -211,7 +212,19 @@ func Milestones(ctx *context.Context) {
 		}
 	}
 
-	counts, err := issues_model.CountMilestonesMap(ctx, issues_model.FindMilestoneOptions{
+	userOrgs, err := organization.GetUserOrgsList(ctx, ctx.Doer)
+	if err != nil {
+		ctx.ServerError("GetUserOrgsList", err)
+		return
+	}
+
+	var userOrgIDs []int64
+
+	for _, userOrg := range userOrgs {
+		userOrgIDs = append(userOrgIDs, userOrg.ID)
+	}
+
+	counts, err := milestone_model.CountMilestonesMap(ctx, milestone_model.FindMilestoneOptions{
 		RepoCond: userRepoCond,
 		Name:     keyword,
 		IsClosed: optional.Some(isShowClosed),
@@ -221,7 +234,7 @@ func Milestones(ctx *context.Context) {
 		return
 	}
 
-	milestones, err := db.Find[issues_model.Milestone](ctx, issues_model.FindMilestoneOptions{
+	milestones, err := db.Find[milestone_model.Milestone](ctx, milestone_model.FindMilestoneOptions{
 		ListOptions: db.ListOptions{
 			Page:     page,
 			PageSize: setting.UI.IssuePagingNum,
@@ -230,6 +243,7 @@ func Milestones(ctx *context.Context) {
 		IsClosed: optional.Some(isShowClosed),
 		SortType: sortType,
 		Name:     keyword,
+		OrgIDs:   userOrgIDs,
 	})
 	if err != nil {
 		ctx.ServerError("SearchMilestones", err)
@@ -243,6 +257,12 @@ func Milestones(ctx *context.Context) {
 	}
 	sort.Sort(showRepos)
 
+	orgs, err := organization.GetOrgsByID(ctx, userOrgIDs)
+	if err != nil {
+		ctx.ServerError("GetOrgsByID", err)
+		return
+	}
+
 	for i := 0; i < len(milestones); {
 		for _, repo := range showRepos {
 			if milestones[i].RepoID == repo.ID {
@@ -250,46 +270,70 @@ func Milestones(ctx *context.Context) {
 				break
 			}
 		}
-		if milestones[i].Repo == nil {
+		for _, org := range orgs {
+			if milestones[i].OrgID == org.ID {
+				milestones[i].Org = org
+				break
+			}
+		}
+		if milestones[i].Repo == nil && milestones[i].OrgID == 0 {
 			log.Warn("Cannot find milestone %d 's repository %d", milestones[i].ID, milestones[i].RepoID)
 			milestones = append(milestones[:i], milestones[i+1:]...)
 			continue
 		}
 
-		milestones[i].RenderedContent, err = markdown.RenderString(&markup.RenderContext{
-			Links: markup.Links{
-				Base: milestones[i].Repo.Link(),
-			},
-			Metas: milestones[i].Repo.ComposeMetas(ctx),
-			Ctx:   ctx,
-			Repo:  milestones[i].Repo,
-		}, milestones[i].Content)
-		if err != nil {
-			ctx.ServerError("RenderString", err)
-			return
-		}
-
-		if milestones[i].Repo.IsTimetrackerEnabled(ctx) {
-			err := milestones[i].LoadTotalTrackedTime(ctx)
+		if milestones[i].Repo != nil {
+			milestones[i].RenderedContent, err = markdown.RenderString(&markup.RenderContext{
+				Links: markup.Links{
+					Base: milestones[i].Repo.Link(),
+				},
+				Metas: milestones[i].Repo.ComposeMetas(ctx),
+				Ctx:   ctx,
+			}, milestones[i].Content)
 			if err != nil {
-				ctx.ServerError("LoadTotalTrackedTime", err)
+				ctx.ServerError("RenderString", err)
+				return
+			}
+
+			if milestones[i].Repo.IsTimetrackerEnabled(ctx) {
+				err := milestones[i].LoadTotalTrackedTime(ctx)
+				if err != nil {
+					ctx.ServerError("LoadTotalTrackedTime", err)
+					return
+				}
+			}
+		}
+		if milestones[i].Org != nil {
+			metas := map[string]string{
+				"org":     milestones[i].Org.FullName,
+				"orgPath": milestones[i].Org.HomeLink(),
+			}
+			milestones[i].RenderedContent, err = markdown.RenderString(&markup.RenderContext{
+				Links: markup.Links{
+					Base: milestones[i].Org.HomeLink(),
+				},
+				Metas: metas,
+				Ctx:   ctx,
+			}, milestones[i].Content)
+			if err != nil {
+				ctx.ServerError("RenderString", err)
 				return
 			}
 		}
 		i++
 	}
 
-	milestoneStats, err := issues_model.GetMilestonesStatsByRepoCondAndKw(ctx, repoCond, keyword)
+	milestoneStats, err := milestone_model.GetMilestonesStatsByRepoCondAndKw(ctx, repoCond, keyword)
 	if err != nil {
 		ctx.ServerError("GetMilestoneStats", err)
 		return
 	}
 
-	var totalMilestoneStats *issues_model.MilestonesStats
+	var totalMilestoneStats *milestone_model.MilestonesStats
 	if len(repoIDs) == 0 {
 		totalMilestoneStats = milestoneStats
 	} else {
-		totalMilestoneStats, err = issues_model.GetMilestonesStatsByRepoCondAndKw(ctx, userRepoCond, keyword)
+		totalMilestoneStats, err = milestone_model.GetMilestonesStatsByRepoCondAndKw(ctx, userRepoCond, keyword)
 		if err != nil {
 			ctx.ServerError("GetMilestoneStats", err)
 			return
@@ -319,6 +363,16 @@ func Milestones(ctx *context.Context) {
 		ctx.Data["Total"] = totalMilestoneStats.OpenCount
 		pagerCount = int(milestoneStats.OpenCount)
 	}
+
+	var userOrgMilestoneStat milestone_model.MilestonesStats
+
+	for _, org := range orgs {
+		userOrgMilestoneStat.OpenCount += int64(org.NumMilestones)
+		userOrgMilestoneStat.ClosedCount += int64(org.NumClosedMilestones)
+	}
+
+	milestoneStats.OpenCount += userOrgMilestoneStat.OpenCount
+	milestoneStats.ClosedCount += userOrgMilestoneStat.ClosedCount
 
 	ctx.Data["Milestones"] = milestones
 	ctx.Data["Repos"] = showRepos

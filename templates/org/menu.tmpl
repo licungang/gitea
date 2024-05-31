@@ -20,6 +20,23 @@
 				{{svg "octicon-package"}} {{ctx.Locale.Tr "packages.title"}}
 			</a>
 			{{end}}
+		<a class="{{if .PageIsViewMilestones}}active {{end}}item" href="{{$.Org.HomeLink}}/-/milestones">
+			{{svg "octicon-milestone"}} {{ctx.Locale.Tr "milestones"}}
+			{{if .MilestoneCount}}
+				<div class="ui small label">{{.MilestoneCount}}</div>
+			{{end}} 
+		</a>
+		{{if and .IsPackageEnabled .CanReadPackages}}
+		<a class="{{if .IsPackagesPage}}active {{end}}item" href="{{$.Org.HomeLink}}/-/packages">
+			{{svg "octicon-package"}} {{ctx.Locale.Tr "packages.title"}}
+		</a>
+		{{end}}
+		{{if and .IsRepoIndexerEnabled .CanReadCode}}
+		<a class="{{if .IsCodePage}}active {{end}}item" href="{{$.Org.HomeLink}}/-/code">
+			{{svg "octicon-code"}} {{ctx.Locale.Tr "org.code"}}
+		</a>
+		{{end}}
+		{{if .NumMembers}}
 			{{if and .IsRepoIndexerEnabled .CanReadCode}}
 			<a class="{{if .IsCodePage}}active {{end}}item" href="{{$.Org.HomeLink}}/-/code">
 				{{svg "octicon-code"}} {{ctx.Locale.Tr "org.code"}}
@@ -45,6 +62,7 @@
 				{{svg "octicon-tools"}} {{ctx.Locale.Tr "repo.settings"}}
 			</a>
 			{{end}}
+		{{end}}
 		</div>
 	</overflow-menu>
 </div>

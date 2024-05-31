@@ -1,7 +1,7 @@
 // Copyright 2019 The Gitea Authors. All rights reserved.
 // SPDX-License-Identifier: MIT
 
-package issue
+package milestone
 
 import (
 	"context"
@@ -9,19 +9,40 @@ import (
 
 	"code.gitea.io/gitea/models/db"
 	issues_model "code.gitea.io/gitea/models/issues"
+	milestone_model "code.gitea.io/gitea/models/milestone"
 	user_model "code.gitea.io/gitea/models/user"
 	notify_service "code.gitea.io/gitea/services/notify"
 )
 
 func changeMilestoneAssign(ctx context.Context, doer *user_model.User, issue *issues_model.Issue, oldMilestoneID int64) error {
-	// Only check if milestone exists if we don't remove it.
+	var milestone *milestone_model.Milestone
+	var err error
+
 	if issue.MilestoneID > 0 {
-		has, err := issues_model.HasMilestoneByRepoID(ctx, issue.RepoID, issue.MilestoneID)
+		milestone, err = milestone_model.GetMilestoneByID(ctx, issue.MilestoneID)
 		if err != nil {
-			return fmt.Errorf("HasMilestoneByRepoID: %w", err)
+			return fmt.Errorf("GetMilestoneByID: %w", err)
 		}
-		if !has {
-			return fmt.Errorf("HasMilestoneByRepoID: issue doesn't exist")
+	}
+
+	if milestone != nil {
+		if issue.MilestoneID > 0 && milestone.RepoID > 0 {
+			has, err := milestone_model.HasMilestoneByRepoID(ctx, issue.RepoID, issue.MilestoneID)
+			if err != nil {
+				return fmt.Errorf("HasMilestoneByRepoID: %w", err)
+			}
+			if !has {
+				return fmt.Errorf("HasMilestoneByRepoID: issue doesn't exist")
+			}
+		}
+		if issue.MilestoneID > 0 && milestone.OrgID > 0 {
+			has, err := milestone_model.HasMilestoneByOrgID(ctx, issue.Repo.OwnerID, issue.MilestoneID)
+			if err != nil {
+				return fmt.Errorf("HasMilestoneByOrgID: %w", err)
+			}
+			if !has {
+				return fmt.Errorf("HasMilestoneByOrgID: issue doesn't exist")
+			}
 		}
 	}
 
@@ -30,13 +51,13 @@ func changeMilestoneAssign(ctx context.Context, doer *user_model.User, issue *is
 	}
 
 	if oldMilestoneID > 0 {
-		if err := issues_model.UpdateMilestoneCounters(ctx, oldMilestoneID); err != nil {
+		if err := milestone_model.UpdateMilestoneCounters(ctx, oldMilestoneID); err != nil {
 			return err
 		}
 	}
 
 	if issue.MilestoneID > 0 {
-		if err := issues_model.UpdateMilestoneCounters(ctx, issue.MilestoneID); err != nil {
+		if err := milestone_model.UpdateMilestoneCounters(ctx, issue.MilestoneID); err != nil {
 			return err
 		}
 	}
@@ -75,7 +96,15 @@ func ChangeMilestoneAssign(ctx context.Context, issue *issues_model.Issue, doer 
 	}
 
 	if err = committer.Commit(); err != nil {
-		return fmt.Errorf("Commit: %w", err)
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	if issue.MilestoneID > 0 {
+		milestone, err := milestone_model.GetMilestoneByID(ctx, issue.MilestoneID)
+		if err != nil {
+			return err
+		}
+		issue.Milestone = milestone
 	}
 
 	notify_service.IssueChangeMilestone(ctx, doer, issue, oldMilestoneID)
