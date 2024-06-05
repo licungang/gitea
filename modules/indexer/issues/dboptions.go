@@ -49,7 +49,7 @@ func ToSearchOptions(keyword string, opts *issues_model.IssuesOptions) *SearchOp
 		return nil
 	}
 
-	searchOpt.ProjectID = convertID(opts.ProjectID)
+	searchOpt.ProjectIDs = convertID(opts.ProjectID)
 	searchOpt.ProjectColumnID = convertID(opts.ProjectColumnID)
 	searchOpt.PosterID = convertID(opts.PosterID)
 	searchOpt.AssigneeID = convertID(opts.AssigneeID)

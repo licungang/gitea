@@ -195,12 +195,8 @@ func (b *Indexer) Search(ctx context.Context, options *internal.SearchOptions) (
 		query.Must(elastic.NewTermsQuery("milestone_id", toAnySlice(options.MilestoneIDs)...))
 	}
 
-	if options.ProjectID.Has() {
-		if v := options.ProjectID.Value(); v != 0 {
-			query.Must(elastic.NewTermQuery("project_ids", v))
-		} else {
-			query.Must(elastic.NewTermQuery("no_project", true))
-		}
+	if len(options.ProjectIDs) > 0 {
+		query.Must(elastic.NewTermsQuery("project_ids", toAnySlice(options.ProjectIDs)...))
 	}
 	if options.ProjectColumnID.Has() {
 		query.Must(elastic.NewTermQuery("project_board_id", options.ProjectColumnID.Value()))
