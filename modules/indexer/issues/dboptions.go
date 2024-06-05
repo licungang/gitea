@@ -49,7 +49,12 @@ func ToSearchOptions(keyword string, opts *issues_model.IssuesOptions) *SearchOp
 		return nil
 	}
 
-	searchOpt.ProjectIDs = convertID(opts.ProjectID)
+	if opts.ProjectID == db.NoProjectID {
+		searchOpt.ProjectIDs = []int64{0}
+	} else {
+		searchOpt.ProjectIDs = convertID(opts.ProjectID)
+	}
+
 	searchOpt.ProjectColumnID = convertID(opts.ProjectColumnID)
 	searchOpt.PosterID = convertID(opts.PosterID)
 	searchOpt.AssigneeID = convertID(opts.AssigneeID)

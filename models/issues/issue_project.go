@@ -123,7 +123,7 @@ func IssueAssignOrRemoveProject(ctx context.Context, issue *Issue, doer *user_mo
 			}{}
 			if _, err := db.GetEngine(ctx).Select("count(*) as issue_count").Table("project_issue").
 				Where("project_id=?", newProjectID).
-				And("project_board_id=?", newColumnID).
+				And("issue_id=?", issue.ID).
 				Get(&res); err != nil {
 				return err
 			}

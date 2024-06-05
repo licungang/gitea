@@ -84,6 +84,14 @@ func ToDBOptions(ctx context.Context, options *internal.SearchOptions) (*issue_m
 		opts.MilestoneIDs = options.MilestoneIDs
 	}
 
+	if len(options.ProjectIDs) == 1 {
+		if options.ProjectIDs[0] == 0 {
+			opts.ProjectID = db.NoProjectID
+		} else {
+			opts.ProjectID = options.ProjectIDs[0]
+		}
+	}
+
 	if options.NoLabelOnly {
 		opts.LabelIDs = []int64{0} // Be careful, it's zero, not db.NoConditionID
 	} else {
