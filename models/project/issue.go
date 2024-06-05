@@ -91,7 +91,7 @@ func MoveIssuesOnProjectColumn(ctx context.Context, column *Column, sortedIssueI
 		}
 
 		for sorting, issueID := range sortedIssueIDs {
-			_, err = sess.Exec("UPDATE `project_issue` SET project_board_id=?, sorting=? WHERE issue_id=?", column.ID, sorting, issueID, projectID)
+			_, err = sess.Exec("UPDATE `project_issue` SET project_board_id=?, sorting=? WHERE issue_id=? AND project_id=?", column.ID, sorting, issueID, projectID)
 			if err != nil {
 				return err
 			}
