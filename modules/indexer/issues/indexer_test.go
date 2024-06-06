@@ -365,7 +365,7 @@ func searchIssueInProject(t *testing.T) {
 			SearchOptions{
 				ProjectIDs: []int64{1},
 			},
-			[]int64{5, 3, 2, 1},
+			[]int64{2},
 		},
 		{
 			SearchOptions{

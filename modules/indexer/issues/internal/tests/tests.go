@@ -302,17 +302,17 @@ var cases = []*testIndexerCase{
 		},
 	},
 	{
-		Name: "ProjectID",
+		Name: "ProjectIDs",
 		SearchOptions: &internal.SearchOptions{
 			Paginator: &db.ListOptions{
 				PageSize: 5,
 			},
-			ProjectIDs: optional.Some(int64(1)),
+			ProjectIDs: []int64{1},
 		},
 		Expected: func(t *testing.T, data map[int64]*internal.IndexerData, result *internal.SearchResult) {
 			assert.Equal(t, 5, len(result.Hits))
 			for _, v := range result.Hits {
-				assert.Contains(t, data[v.ID].ProjectIDs, int64(1))
+				assert.Contains(t, []int64{1}, data[v.ID].ProjectIDs)
 			}
 			assert.Equal(t, countIndexerData(data, func(v *internal.IndexerData) bool {
 				return slices.Contains(v.ProjectIDs, 1)
@@ -320,12 +320,12 @@ var cases = []*testIndexerCase{
 		},
 	},
 	{
-		Name: "no ProjectID",
+		Name: "no ProjectIDs",
 		SearchOptions: &internal.SearchOptions{
 			Paginator: &db.ListOptions{
 				PageSize: 5,
 			},
-			ProjectIDs: optional.Some(int64(0)),
+			ProjectIDs: []int64{0},
 		},
 		Expected: func(t *testing.T, data map[int64]*internal.IndexerData, result *internal.SearchResult) {
 			assert.Equal(t, 5, len(result.Hits))
