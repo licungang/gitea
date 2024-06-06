@@ -38,6 +38,12 @@ func ToSearchOptions(keyword string, opts *issues_model.IssuesOptions) *SearchOp
 		searchOpt.MilestoneIDs = opts.MilestoneIDs
 	}
 
+	if len(opts.ProjectIDs) == 1 && opts.ProjectIDs[0] == db.NoConditionID {
+		searchOpt.ProjectIDs = []int64{0}
+	} else {
+		searchOpt.ProjectIDs = opts.ProjectIDs
+	}
+
 	// See the comment of issues_model.SearchOptions for the reason why we need to convert
 	convertID := func(id int64) optional.Option[int64] {
 		if id > 0 {
@@ -47,12 +53,6 @@ func ToSearchOptions(keyword string, opts *issues_model.IssuesOptions) *SearchOp
 			return optional.None[int64]()
 		}
 		return nil
-	}
-
-	if opts.ProjectID == db.NoProjectID {
-		searchOpt.ProjectIDs = []int64{0}
-	} else {
-		searchOpt.ProjectIDs = convertID(opts.ProjectID)
 	}
 
 	searchOpt.ProjectColumnID = convertID(opts.ProjectColumnID)

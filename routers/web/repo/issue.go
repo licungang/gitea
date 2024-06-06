@@ -201,12 +201,17 @@ func issues(ctx *context.Context, milestoneID, projectID int64, isPullOption opt
 		mileIDs = []int64{milestoneID}
 	}
 
+	var projIDs []int64
+	if projectID > 0 || projectID == db.NoConditionID {
+		projIDs = []int64{projectID}
+	}
+
 	var issueStats *issues_model.IssueStats
 	statsOpts := &issues_model.IssuesOptions{
 		RepoIDs:           []int64{repo.ID},
 		LabelIDs:          labelIDs,
 		MilestoneIDs:      mileIDs,
-		ProjectID:         projectID,
+		ProjectIDs:        projIDs,
 		AssigneeID:        assigneeID,
 		MentionedID:       mentionedID,
 		PosterID:          posterID,
@@ -296,7 +301,7 @@ func issues(ctx *context.Context, milestoneID, projectID int64, isPullOption opt
 			ReviewRequestedID: reviewRequestedID,
 			ReviewedID:        reviewedID,
 			MilestoneIDs:      mileIDs,
-			ProjectID:         projectID,
+			ProjectIDs:        projIDs,
 			IsClosed:          isShowClosed,
 			IsPull:            isPullOption,
 			LabelIDs:          labelIDs,

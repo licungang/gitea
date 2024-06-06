@@ -44,7 +44,7 @@ func (issue *Issue) ProjectColumnID(ctx context.Context) int64 {
 func LoadIssuesFromColumn(ctx context.Context, b *project_model.Column) (IssueList, error) {
 	issueList, err := Issues(ctx, &IssuesOptions{
 		ProjectColumnID: b.ID,
-		ProjectID:       b.ProjectID,
+		ProjectIDs:      []int64{b.ProjectID},
 		SortType:        "project-column-sorting",
 	})
 	if err != nil {
@@ -54,7 +54,7 @@ func LoadIssuesFromColumn(ctx context.Context, b *project_model.Column) (IssueLi
 	if b.Default {
 		issues, err := Issues(ctx, &IssuesOptions{
 			ProjectColumnID: db.NoConditionID,
-			ProjectID:       b.ProjectID,
+			ProjectIDs:      []int64{b.ProjectID},
 			SortType:        "project-column-sorting",
 		})
 		if err != nil {
