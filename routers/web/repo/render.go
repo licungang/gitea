@@ -45,7 +45,7 @@ func RenderFile(ctx *context.Context) {
 	isTextFile := st.IsText()
 
 	rd := charset.ToUTF8WithFallbackReader(io.MultiReader(bytes.NewReader(buf), dataRc), charset.ConvertOpts{})
-	ctx.Resp.Header().Add("Content-Security-Policy", "frame-src 'self'; sandbox allow-scripts")
+	ctx.Resp.Header().Add("Content-Security-Policy", "frame-src 'self'; sandbox allow-scripts allow-same-origin")
 
 	if markupType := markup.Type(blob.Name()); markupType == "" {
 		if isTextFile {
@@ -56,6 +56,9 @@ func RenderFile(ctx *context.Context) {
 		return
 	}
 
+	metaData := ctx.Repo.Repository.ComposeDocumentMetas(ctx)
+	metaData["BranchNameSubURL"] = ctx.Repo.BranchNameSubURL()
+
 	err = markup.Render(&markup.RenderContext{
 		Ctx:          ctx,
 		RelativePath: ctx.Repo.TreePath,
@@ -64,7 +67,7 @@ func RenderFile(ctx *context.Context) {
 			BranchPath: ctx.Repo.BranchNameSubURL(),
 			TreePath:   path.Dir(ctx.Repo.TreePath),
 		},
-		Metas:            ctx.Repo.Repository.ComposeDocumentMetas(ctx),
+		Metas:            metaData,
 		GitRepo:          ctx.Repo.GitRepo,
 		InStandalonePage: true,
 	}, rd, ctx.Resp)
