@@ -974,6 +974,8 @@ func registerRoutes(m *web.Router) {
 	// end "/repo": create, migrate, search
 
 	m.Group("/{username}/-", func() {
+		m.Post("/markup", web.Bind(structs.MarkupOption{}), misc.Markup)
+
 		if setting.Packages.Enabled {
 			m.Group("/packages", func() {
 				m.Get("", user.ListPackages)

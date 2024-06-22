@@ -75,6 +75,7 @@ import {initRepoCodeFrequency} from './features/code-frequency.js';
 import {initRepoRecentCommits} from './features/recent-commits.js';
 import {initRepoDiffCommitBranchesAndTags} from './features/repo-diff-commit.js';
 import {initDirAuto} from './modules/dirauto.js';
+import {initComboMarkdownEditorGlobal} from './features/misc.js';
 import {initRepositorySearch} from './features/repo-search.js';
 import {initColorPickers} from './features/colorpicker.js';
 import {initAdminSelfCheck} from './features/admin/selfcheck.js';
@@ -199,5 +200,8 @@ onDomReady(() => {
   initRepoDiffView();
   initPdfViewer();
   initScopedAccessTokenCategories();
+
+  initComboMarkdownEditorGlobal();
+
   initColorPickers();
 });

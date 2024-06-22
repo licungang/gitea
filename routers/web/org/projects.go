@@ -16,6 +16,8 @@ import (
 	"code.gitea.io/gitea/models/unit"
 	"code.gitea.io/gitea/modules/base"
 	"code.gitea.io/gitea/modules/json"
+	"code.gitea.io/gitea/modules/markup"
+	"code.gitea.io/gitea/modules/markup/markdown"
 	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/templates"
@@ -145,6 +147,10 @@ func RenderNewProject(ctx *context.Context) {
 	ctx.Data["PageIsViewProjects"] = true
 	ctx.Data["HomeLink"] = ctx.ContextUser.HomeLink()
 	ctx.Data["CancelLink"] = ctx.ContextUser.HomeLink() + "/-/projects"
+	ctx.Data["ProjectMarkdownPreviewURL"] = fmt.Sprintf("%s/-/markup", ctx.ContextUser.HomeLink())
+	ctx.Data["ProjectMarkdownPreviewContext"] = ctx.ContextUser.HomeLink()
+	ctx.Data["ProjectMarkdownPreviewMode"] = "markdown"
+	ctx.Data["ProjectMarkdownHideRepoButtons"] = true
 	shared_user.RenderUserHeader(ctx)
 
 	err := shared_user.LoadHeaderCount(ctx)
@@ -260,6 +266,10 @@ func RenderEditProject(ctx *context.Context) {
 	ctx.Data["HomeLink"] = ctx.ContextUser.HomeLink()
 	ctx.Data["card_type"] = p.CardType
 	ctx.Data["CancelLink"] = fmt.Sprintf("%s/-/projects/%d", ctx.ContextUser.HomeLink(), p.ID)
+	ctx.Data["ProjectMarkdownPreviewURL"] = fmt.Sprintf("%s/-/markup", ctx.ContextUser.HomeLink())
+	ctx.Data["ProjectMarkdownPreviewContext"] = ctx.ContextUser.HomeLink()
+	ctx.Data["ProjectMarkdownPreviewMode"] = "markdown"
+	ctx.Data["ProjectMarkdownHideRepoButtons"] = true
 
 	ctx.HTML(http.StatusOK, tplProjectsNew)
 }
