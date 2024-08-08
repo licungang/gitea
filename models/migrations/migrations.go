@@ -597,6 +597,8 @@ var migrations = []Migration{
 	NewMigration("Add skip_secondary_authorization option to oauth2 application table", v1_23.AddSkipSecondaryAuthColumnToOAuth2ApplicationTable),
 	// v302 -> v303
 	NewMigration("Add index to action_task stopped log_expired", v1_23.AddIndexToActionTaskStoppedLogExpired),
+	// v303 -> v304
+	NewMigration("Add audit_event table", v1_23.AddAuditEventTable),
 }
 
 // GetCurrentDBVersion returns the current db version
