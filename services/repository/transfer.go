@@ -18,6 +18,7 @@ import (
 	project_model "code.gitea.io/gitea/models/project"
 	repo_model "code.gitea.io/gitea/models/repo"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/gitrepo"
 	"code.gitea.io/gitea/modules/log"
 	repo_module "code.gitea.io/gitea/modules/repository"
 	"code.gitea.io/gitea/modules/sync"
@@ -82,7 +83,7 @@ func transferOwnership(ctx context.Context, doer *user_model.User, newOwnerName 
 		}
 
 		if repoRenamed {
-			if err := util.Rename(repo_model.RepoPath(newOwnerName, repo.Name), repo_model.RepoPath(oldOwnerName, repo.Name)); err != nil {
+			if err := gitrepo.RenameDir(ctx, newOwnerName+"/"+repo.Name, oldOwnerName+"/"+repo.Name); err != nil {
 				log.Critical("Unable to move repository %s/%s directory from %s back to correct place %s: %v", oldOwnerName, repo.Name,
 					repo_model.RepoPath(newOwnerName, repo.Name), repo_model.RepoPath(oldOwnerName, repo.Name), err)
 			}
@@ -323,19 +324,12 @@ func changeRepositoryName(ctx context.Context, repo *repo_model.Repository, newR
 		}
 	}
 
-	newRepoPath := repo_model.RepoPath(repo.Owner.Name, newRepoName)
-	if err = util.Rename(repo.RepoPath(), newRepoPath); err != nil {
-		return fmt.Errorf("rename repository directory: %w", err)
-	}
-
-	wikiPath := repo.WikiPath()
-	isExist, err := util.IsExist(wikiPath)
-	if err != nil {
-		log.Error("Unable to check if %s exists. Error: %v", wikiPath, err)
+	if err := gitrepo.RenameRepository(ctx, repo, newRepoName); err != nil {
 		return err
 	}
-	if isExist {
-		if err = util.Rename(wikiPath, repo_model.WikiPath(repo.Owner.Name, newRepoName)); err != nil {
+
+	if repo.HasWiki() {
+		if err = gitrepo.RenameWikiRepository(ctx, repo, newRepoName); err != nil {
 			return fmt.Errorf("rename repository wiki: %w", err)
 		}
 	}

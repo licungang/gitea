@@ -253,7 +253,7 @@ func handlePullRequestAutoMerge(pullID int64, sha string) {
 			return
 		}
 	case issues_model.PullRequestFlowAGit:
-		headBranchExist := git.IsReferenceExist(ctx, baseGitRepo.Path, pr.GetGitRefName())
+		headBranchExist := baseGitRepo.IsReferenceExist(pr.GetGitRefName())
 		if !headBranchExist {
 			log.Warn("Head branch of auto merge %-v does not exist [HeadRepoID: %d, Branch(Agit): %s]", pr, pr.HeadRepoID, pr.HeadBranch)
 			return

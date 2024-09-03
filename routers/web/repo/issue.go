@@ -34,6 +34,7 @@ import (
 	"code.gitea.io/gitea/modules/container"
 	"code.gitea.io/gitea/modules/emoji"
 	"code.gitea.io/gitea/modules/git"
+	"code.gitea.io/gitea/modules/gitrepo"
 	issue_indexer "code.gitea.io/gitea/modules/indexer/issues"
 	issue_template "code.gitea.io/gitea/modules/issue/template"
 	"code.gitea.io/gitea/modules/log"
@@ -1960,7 +1961,7 @@ func ViewIssue(ctx *context.Context) {
 
 		isPullBranchDeletable := canDelete &&
 			pull.HeadRepo != nil &&
-			git.IsBranchExist(ctx, pull.HeadRepo.RepoPath(), pull.HeadBranch) &&
+			gitrepo.IsBranchExist(ctx, pull.HeadRepo, pull.HeadBranch) &&
 			(!pull.HasMerged || ctx.Data["HeadBranchCommitID"] == ctx.Data["PullHeadCommitID"])
 
 		if isPullBranchDeletable && pull.HasMerged {
@@ -3074,7 +3075,7 @@ func NewComment(ctx *context.Context) {
 						ctx.ServerError("Unable to load head repo", err)
 						return
 					}
-					if ok := git.IsBranchExist(ctx, pull.HeadRepo.RepoPath(), pull.BaseBranch); !ok {
+					if ok := gitrepo.IsBranchExist(ctx, pull.HeadRepo, pull.BaseBranch); !ok {
 						// todo localize
 						ctx.JSONError("The origin branch is delete, cannot reopen.")
 						return

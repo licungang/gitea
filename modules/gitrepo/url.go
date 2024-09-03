@@ -6,3 +6,7 @@ package gitrepo
 func RepoGitURL(repo Repository) string {
 	return repoPath(repo)
 }
+
+func WikiRepoGitURL(repo Repository) string {
+	return repoPath(repo)
+}
