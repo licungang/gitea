@@ -38,8 +38,8 @@ type ActionTaskResponse struct {
 // swagger:model CreateActionWorkflowDispatch
 type CreateActionWorkflowDispatch struct {
 	// required: true
-	Ref    string                 `json:"ref"`
-	Inputs map[string]interface{} `json:"inputs"`
+	Ref    string         `json:"ref"`
+	Inputs map[string]any `json:"inputs"`
 }
 
 // ActionWorkflow represents a ActionWorkflow
