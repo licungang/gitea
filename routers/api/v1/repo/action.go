@@ -9,12 +9,7 @@ import (
 
 	actions_model "code.gitea.io/gitea/models/actions"
 	"code.gitea.io/gitea/models/db"
-	"code.gitea.io/gitea/models/perm"
-	access_model "code.gitea.io/gitea/models/perm/access"
 	secret_model "code.gitea.io/gitea/models/secret"
-	"code.gitea.io/gitea/models/unit"
-	"code.gitea.io/gitea/modules/actions"
-	"code.gitea.io/gitea/modules/git"
 	api "code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/util"
 	"code.gitea.io/gitea/modules/web"
@@ -24,9 +19,6 @@ import (
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/convert"
 	secret_service "code.gitea.io/gitea/services/secrets"
-
-	"github.com/nektos/act/pkg/jobparser"
-	"github.com/nektos/act/pkg/model"
 )
 
 // ListActionsSecrets list an repo's actions secrets
