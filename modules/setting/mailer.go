@@ -28,6 +28,7 @@ type Mailer struct {
 	SendAsPlainText      bool                `ini:"SEND_AS_PLAIN_TEXT"`
 	SubjectPrefix        string              `ini:"SUBJECT_PREFIX"`
 	OverrideHeader       map[string][]string `ini:"-"`
+	Base64EmbedImages    bool                `ini:"BASE64_EMBED_IMAGES"`
 
 	// SMTP sender
 	Protocol             string `ini:"PROTOCOL"`
@@ -150,6 +151,7 @@ func loadMailerFrom(rootCfg ConfigProvider) {
 	sec.Key("SENDMAIL_TIMEOUT").MustDuration(5 * time.Minute)
 	sec.Key("SENDMAIL_CONVERT_CRLF").MustBool(true)
 	sec.Key("FROM").MustString(sec.Key("USER").String())
+	sec.Key("BASE64_EMBED_IMAGES").MustBool(false)
 
 	// Now map the values on to the MailService
 	MailService = &Mailer{}
